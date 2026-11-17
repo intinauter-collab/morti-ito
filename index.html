@@ -175,7 +175,8 @@ ol.top5 li.me{outline:2px solid var(--leaf);background:#21502f}
     <ul class="howto">
       <li>🫐 <span>Mueve a Mortiñito con <b>← →</b>, <b>A / D</b>, o arrastrando el dedo sobre el campo.</span></li>
       <li>☀️ <span>Atrapa <b>fotones, agua y CO₂</b> para sumar puntos. Esquiva los <b>pulgones y hongos</b>: en cada nivel caen más y más rápido.</span></li>
-      <li>⚡ <span>La energía baja sola. Para recargarla, <b>responde una pregunta del curso</b>. Si llega a cero, la pregunta es obligatoria.</span></li>
+      <li>❓ <span><b>Cada 10 segundos</b> aparece una pregunta del curso. Correcta: suma puntos y energía. Incorrecta: <b>resta 50 puntos</b>.</span></li>
+      <li>⚡ <span>La energía baja sola. Puedes recargarla antes con el botón amarillo; si llega a cero, la pregunta es obligatoria.</span></li>
       <li>📈 <span>Cada 45 s subes de nivel: <b>estructuras → transporte → postcosecha → germinación → interacción entre plantas → fitohormonas</b>. Más nivel, más puntos por respuesta.</span></li>
     </ul>
     <div class="field"><label for="nameIn">Tu nombre en el ranking</label><input id="nameIn" maxlength="18" value="" placeholder="Ej.: Ana P." autocomplete="off"></div>
@@ -2854,11 +2855,11 @@ function resize(){
 }
 new ResizeObserver(resize).observe(wrap); resize();
 
-const ROUND = 270, LEVEL_TIME = 45;
+const ROUND = 270, LEVEL_TIME = 45, QUIZ_EVERY = 10, PENALTY = 50;
 let G, bots, pools = LEVELS.map(()=>[[],[],[]]), keys = {}, pointerX = null, last = 0, quizMode = null, botTimer = 0;
 
 function newGame(){
-  G = {running:false, energy:100, score:0, time:ROUND, px:.5, items:[], fx:[], spawn:0, hurt:0, glow:0, right:0, asked:0, level:0, banner:null, lvlAsked:[0,0,0,0,0,0],
+  G = {running:false, energy:100, score:0, time:ROUND, px:.5, items:[], fx:[], spawn:0, hurt:0, glow:0, right:0, asked:0, level:0, banner:null, lvlAsked:[0,0,0,0,0,0], qTimer:0,
        name: ($("nameIn").value.trim()||"Tú").slice(0,18)};
   bots = NAMES.map(n => ({n, s:0, rate: 7 + Math.random()*14}));
 }
@@ -2908,7 +2909,7 @@ function tick(t){
 }
 function update(dt){
   // movimiento
-  const sp = 1.05;
+  const sp = 1.75;
   if(keys["arrowleft"]||keys["a"]) G.px -= sp*dt;
   if(keys["arrowright"]||keys["d"]) G.px += sp*dt;
   if(pointerX!==null) G.px += Math.max(-sp*dt, Math.min(sp*dt, pointerX - G.px));
@@ -2940,7 +2941,9 @@ function update(dt){
   const lv = Math.min(LEVELS.length-1, Math.floor((ROUND-G.time)/LEVEL_TIME));
   if(lv!==G.level){ G.level=lv; G.banner={txt:"Nivel "+(lv+1)+": "+LEVELS[lv].name, life:3}; }
   if(G.banner){ G.banner.life-=dt; if(G.banner.life<=0) G.banner=null; }
+  G.qTimer += dt;
   if(G.energy<=0){ G.energy=0; openQuiz("forced"); }
+  else if(G.qTimer >= QUIZ_EVERY){ openQuiz("timed"); }
   if(G.time<=0){ G.time=0; finish(); }
   sendScore(false);
   renderHud();
@@ -3198,8 +3201,8 @@ function renderBoard(){
 
 // ---------- Preguntas ----------
 function nextQuestion(){
-  // 1.ª pregunta del nivel: básica; 2.ª: intermedia; desde la 3.ª: avanzada
-  const L = G.level, band = Math.min(2, G.lvlAsked[L]++), pool = pools[L][band];
+  // En cada nivel: 2 preguntas básicas, luego 2 intermedias y después avanzadas
+  const L = G.level, band = Math.min(2, Math.floor(G.lvlAsked[L]++/2)), pool = pools[L][band];
   const from = [0,17,34][band], to = [17,34,50][band];
   if(!pool.length) for(let i=from;i<to;i++) pool.push(i);
   const idx = pool.splice(Math.floor(Math.random()*pool.length),1)[0], r = LEVELS[L].qs[idx];
@@ -3207,12 +3210,12 @@ function nextQuestion(){
   return {q:r[0], o:opts.map(j=>r[1+j]), a:opts.indexOf(0), e:r[5], band};
 }
 function openQuiz(mode){
-  quizMode = mode; keys = {}; pointerX = null;
+  quizMode = mode; keys = {}; pointerX = null; G.qTimer = 0;
   const q = nextQuestion(); G.asked++;
-  $("qEyebrow").textContent = mode==="forced" ? "¡Mortiñito se quedó sin energía!" : "Recarga de energía";
+  $("qEyebrow").textContent = mode==="forced" ? "¡Mortiñito se quedó sin energía!" : mode==="timed" ? "Pregunta del campo" : "Recarga de energía";
   const pts = 15 + 10*(G.level+1);
   $("qTopic").textContent = "Nivel "+(G.level+1)+" · "+LEVELS[G.level].name+" · "+["básica","intermedia","avanzada"][q.band];
-  $("qReward").textContent = mode==="forced" ? "Correcta: energía al 70%" : "Correcta: +35 energía y +"+pts+" pts";
+  $("qReward").textContent = (mode==="forced" ? "Correcta: energía al 70%" : "Correcta: +"+pts+" pts y +35 energía") + " · Incorrecta: −"+PENALTY+" pts";
   $("qText").textContent = q.q;
   $("qFb").hidden = true; $("qNext").hidden = true;
   const box = $("qOpts"); box.innerHTML = "";
@@ -3235,14 +3238,16 @@ function answer(q,i,pts){
     fb.innerHTML = "<b>¡Correcto!</b> ";
     $("qNext").textContent = "Volver al juego";
   } else {
-    fb.innerHTML = "<b>No es correcta.</b> La respuesta es "+String.fromCharCode(65+q.a)+". ";
+    G.score = Math.max(0, G.score - PENALTY);
+    G.fx.push({x:W/2, y:H*.45, txt:"−"+PENALTY+" pts", c:"#ef6a8a", life:1.4});
+    fb.innerHTML = "<b>No es correcta: −"+PENALTY+" puntos.</b> La respuesta es "+String.fromCharCode(65+q.a)+". ";
     $("qNext").textContent = quizMode==="forced" ? "Intentar otra pregunta" : "Volver al juego";
   }
   fb.append(q.e); fb.hidden = false; $("qNext").hidden = false; $("qNext").focus();
   $("qNext").onclick = () => {
     $("quiz").hidden = true;
     if(!ok && quizMode==="forced"){ openQuiz("forced"); return; }
-    quizMode = null; renderHud(); renderBoard();
+    quizMode = null; G.qTimer = 0; sendScore(true); renderHud(); renderBoard();
   };
 }
 $("btnQ").onclick = () => { if(G.running && !quizMode) openQuiz("voluntary"); };
