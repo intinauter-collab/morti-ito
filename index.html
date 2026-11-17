@@ -1,0 +1,3282 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
+</head>
+<body>
+<title>Mortiñito en el campo</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Atkinson+Hyperlegible:wght@400;700&display=swap">
+<style>
+/* Layout: tablero oscuro de campo al anochecer con juego de día al centro; juego a la izquierda, ranking en vivo a la derecha (se apila en teléfono). Tema único oscuro, a propósito. */
+:root{
+  --bg:#0c1d15; --panel:#14301f; --panel-2:#1b3d29; --line:#2b5a3d;
+  --ink:#eef6e8; --muted:#a3bfa9;
+  --leaf:#7ed957; --sun:#ffc94a; --water:#5ec8f2; --pest:#ef6a8a; --clay:#d9824b;
+  --display:"Bricolage Grotesque", "Trebuchet MS", system-ui, sans-serif;
+  --body:"Atkinson Hyperlegible", system-ui, -apple-system, "Segoe UI", sans-serif;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:15px;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:12px}
+button{font:inherit;cursor:pointer}
+button:focus-visible,input:focus-visible{outline:3px solid var(--sun);outline-offset:2px}
+.app{max-width:1180px;margin:0 auto;display:grid;grid-template-columns:minmax(0,1fr) 300px;grid-template-rows:auto minmax(0,1fr);gap:14px;height:100%}
+header.top{grid-column:1/-1;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.brand{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.brand h1{font-family:var(--display);font-weight:800;font-size:1.6rem;margin:0;letter-spacing:-.01em}
+.brand span{color:var(--muted);font-size:.85rem}
+.room{font-size:.8rem;color:var(--muted);letter-spacing:.06em;text-transform:uppercase}
+.room b{color:var(--sun);font-variant-numeric:tabular-nums}
+
+.stage{display:flex;flex-direction:column;gap:10px;min-width:0;min-height:0}
+.hud{display:grid;grid-template-columns:1fr auto auto;gap:10px;align-items:center;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:10px 12px}
+.energy-label{display:flex;justify-content:space-between;font-size:.75rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:5px}
+.energy-label b{color:var(--ink);font-variant-numeric:tabular-nums}
+.bar{height:16px;border-radius:99px;background:#0a1710;border:1px solid var(--line);overflow:hidden}
+.bar i{display:block;height:100%;width:100%;border-radius:99px;background:linear-gradient(90deg,var(--leaf),#b9ef6a);transition:width .2s linear,background .3s}
+.bar.low i{background:linear-gradient(90deg,var(--pest),#ffb36b)}
+.stat{text-align:center;min-width:64px}
+.stat small{display:block;font-size:.7rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
+.stat strong{font-family:var(--display);font-size:1.35rem;font-variant-numeric:tabular-nums}
+.canvas-wrap{position:relative;flex:1;min-height:340px;border-radius:16px;overflow:hidden;border:1px solid var(--line);background:#6fb8e0;touch-action:none}
+.level{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;font-size:.85rem;color:var(--muted);padding:0 4px}
+.level b{color:var(--ink)}
+.steps{display:flex;gap:4px}
+.steps i{width:22px;height:6px;border-radius:3px;background:var(--line)}
+.steps i.done{background:var(--leaf)}
+.steps i.now{background:var(--sun)}
+canvas{display:block;width:100%;height:100%}
+.controls{display:flex;gap:10px}
+.controls button{flex:1;border-radius:12px;border:1px solid var(--line);background:var(--panel-2);color:var(--ink);padding:12px;font-weight:700}
+.controls .recharge{flex:2;background:var(--sun);color:#2a1c00;border-color:transparent}
+.controls .recharge:disabled{opacity:.45;cursor:not-allowed}
+.move{display:none}
+@media (pointer:coarse){.move{display:block;font-size:1.3rem}}
+
+aside.board{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:14px;display:flex;flex-direction:column;gap:12px;min-width:0;align-self:start}
+.board h2{font-family:var(--display);font-size:1.1rem;margin:0;display:flex;justify-content:space-between;align-items:center}
+.live{font-family:var(--body);font-size:.72rem;color:var(--muted);display:flex;align-items:center;gap:6px;font-weight:400}
+.live::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--pest);animation:pulse 1.4s infinite}
+@keyframes pulse{50%{opacity:.3}}
+ol.top5{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+ol.top5 li{display:grid;grid-template-columns:28px 1fr auto;gap:8px;align-items:center;padding:8px 10px;border-radius:10px;background:var(--panel-2);font-variant-numeric:tabular-nums}
+ol.top5 li .pos{font-family:var(--display);font-weight:800;color:var(--muted)}
+ol.top5 li:nth-child(1) .pos{color:var(--sun)}
+ol.top5 li .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+ol.top5 li.me{outline:2px solid var(--leaf);background:#21502f}
+.myrank{font-size:.9rem;color:var(--muted);border-top:1px dashed var(--line);padding-top:10px}
+.myrank b{color:var(--ink)}
+.legend{display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:.78rem;color:var(--muted)}
+.legend span{display:flex;align-items:center;gap:6px}
+.dot{width:12px;height:12px;border-radius:50%;flex:none}
+.note{font-size:.75rem;color:var(--muted);line-height:1.4;margin:0}
+
+.overlay{position:fixed;inset:0;background:rgba(5,14,9,.78);display:grid;place-items:center;z-index:20;
+  padding:max(16px,env(safe-area-inset-top,0px)) max(16px,env(safe-area-inset-right,0px)) max(16px,env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px))}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:22px;max-width:520px;width:100%;max-height:100%;overflow:auto;display:flex;flex-direction:column;gap:14px}
+.card h2{font-family:var(--display);font-size:1.5rem;margin:0;text-wrap:balance}
+.card p{margin:0;line-height:1.5;color:var(--muted)}
+.eyebrow{font-size:.72rem;text-transform:uppercase;letter-spacing:.1em;color:var(--sun);font-weight:700}
+.field{display:flex;flex-direction:column;gap:6px}
+.field label{font-size:.85rem;color:var(--muted)}
+.field input{padding:12px;border-radius:10px;border:1px solid var(--line);background:#0a1710;color:var(--ink);font:inherit;font-size:1rem}
+.primary{background:var(--leaf);color:#0b2410;border:0;border-radius:12px;padding:13px 16px;font-weight:700;font-size:1rem}
+.ghost{background:transparent;color:var(--ink);border:1px solid var(--line);border-radius:12px;padding:12px 16px;font-weight:700}
+.howto{display:grid;gap:8px;font-size:.9rem;color:var(--muted);padding:0;margin:0;list-style:none}
+.howto li{display:flex;gap:8px}
+.howto li b{color:var(--ink)}
+.q-text{font-size:1.1rem;color:var(--ink)!important;line-height:1.45}
+.opts{display:grid;gap:8px}
+.opts button{text-align:left;padding:12px 14px;border-radius:12px;border:1px solid var(--line);background:var(--panel-2);color:var(--ink);line-height:1.35}
+.opts button:hover:not(:disabled){border-color:var(--leaf)}
+.opts button.ok{background:#245c33;border-color:var(--leaf)}
+.opts button.bad{background:#5a2232;border-color:var(--pest)}
+.opts button:disabled{cursor:default}
+.feedback{border-radius:12px;padding:12px;background:#0a1710;border:1px solid var(--line);font-size:.92rem;line-height:1.45}
+.feedback b{color:var(--leaf)}
+.feedback.wrong b{color:var(--pest)}
+.qmeta{display:flex;justify-content:space-between;font-size:.78rem;color:var(--muted)}
+.results{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;text-align:center}
+.results div{background:var(--panel-2);border-radius:12px;padding:10px}
+.results strong{display:block;font-family:var(--display);font-size:1.5rem;font-variant-numeric:tabular-nums}
+.results small{color:var(--muted);font-size:.72rem;text-transform:uppercase;letter-spacing:.06em}
+
+.proj{position:fixed;inset:0;z-index:30;background:var(--bg);overflow:auto;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.3fr);gap:28px;align-items:center;
+  padding:max(24px,env(safe-area-inset-top,0px)) max(24px,env(safe-area-inset-right,0px)) max(24px,env(safe-area-inset-bottom,0px)) max(24px,env(safe-area-inset-left,0px))}
+.proj h2{font-family:var(--display);font-size:clamp(1.6rem,3.2vw,2.8rem);margin:0 0 6px}
+.proj .join{display:flex;flex-direction:column;gap:14px;align-items:flex-start}
+.qrbox{background:#fff;padding:14px;border-radius:16px;width:min(340px,70vw);aspect-ratio:1;max-width:100%}
+.qrbox canvas,.qrbox img{width:100%!important;height:auto!important;display:block}
+.proj .url{font-size:clamp(.9rem,1.4vw,1.2rem);color:var(--sun);word-break:break-all;font-weight:700}
+.proj ol.top5 li{font-size:clamp(1.1rem,2.2vw,1.9rem);padding:14px 18px;grid-template-columns:48px 1fr auto}
+.proj .meta{color:var(--muted);font-size:1rem;display:flex;gap:16px;flex-wrap:wrap;align-items:center}
+.proj .meta b{color:var(--ink)}
+.teacher{background:none;border:0;color:var(--muted);text-decoration:underline;padding:0;font-size:.85rem;align-self:center}
+@media (max-width:820px){.proj{grid-template-columns:minmax(0,1fr)}}
+@media (max-width:820px){
+  .app{grid-template-columns:minmax(0,1fr);height:auto}
+  .canvas-wrap{min-height:0;height:56vh;flex:none}
+  .brand h1{font-size:1.3rem}
+  .legend{display:none}
+}
+@media (prefers-reduced-motion:reduce){.live::before{animation:none}.bar i{transition:none}}
+</style>
+
+<div class="app">
+  <header class="top">
+    <div class="brand"><h1>Mortiñito en el campo</h1><span>Botánica y fisiología vegetal · 4.º nivel</span></div>
+    <div class="room">Sala <b id="roomCode">BFV-401</b> · <b id="players">35</b> jugando</div>
+  </header>
+
+  <section class="stage">
+    <div class="hud">
+      <div>
+        <div class="energy-label"><span>Energía (ATP)</span><b id="energyTxt">100%</b></div>
+        <div class="bar" id="bar"><i id="barFill"></i></div>
+      </div>
+      <div class="stat"><small>Puntaje</small><strong id="scoreTxt">0</strong></div>
+      <div class="stat"><small>Tiempo</small><strong id="timeTxt">4:30</strong></div>
+    </div>
+    <div class="level" id="levelBox"><span>Nivel <b id="lvlNum">1</b> de 6 · <b id="lvlName">Estructuras vegetales</b></span><span class="steps" id="lvlSteps"></span></div>
+    <div class="canvas-wrap" id="wrap"><canvas id="cv" aria-label="Área de juego: mueve a Mortiñito para atrapar luz, agua y CO₂"></canvas></div>
+    <div class="controls">
+      <button class="move" id="btnL" aria-label="Mover a la izquierda">◀</button>
+      <button class="recharge" id="btnQ">Recargar energía con una pregunta</button>
+      <button class="move" id="btnR" aria-label="Mover a la derecha">▶</button>
+    </div>
+  </section>
+
+  <aside class="board">
+    <h2>Top 5 del curso <span class="live">En vivo</span></h2>
+    <ol class="top5" id="top5"></ol>
+    <div class="myrank" id="myrank">Tu posición aparecerá al empezar.</div>
+    <div class="legend">
+      <span><i class="dot" style="background:var(--sun)"></i>Fotón: +10</span>
+      <span><i class="dot" style="background:var(--water)"></i>Agua: +5 y energía</span>
+      <span><i class="dot" style="background:#b8c4bc"></i>CO₂: +15</span>
+      <span><i class="dot" style="background:var(--pest)"></i>Pulgón: −15 energía</span>
+      <span><i class="dot" style="background:#b48ae6"></i>Hongo: −15 energía</span>
+    </div>
+    <p class="note" id="modeNote">Prototipo: los otros 34 jugadores son simulados. En clase, cada estudiante verá el ranking real del curso.</p>
+  </aside>
+</div>
+
+<!-- Pantalla de inicio -->
+<div class="overlay" id="lobby">
+  <div class="card">
+    <div class="eyebrow">Ronda de 4:30 · 6 niveles · 300 preguntas</div>
+    <h2>Mantén con energía a Mortiñito</h2>
+    <ul class="howto">
+      <li>🫐 <span>Mueve a Mortiñito con <b>← →</b>, <b>A / D</b>, o arrastrando el dedo sobre el campo.</span></li>
+      <li>☀️ <span>Atrapa <b>fotones, agua y CO₂</b> para sumar puntos. Esquiva los <b>pulgones y hongos</b>: en cada nivel caen más y más rápido.</span></li>
+      <li>⚡ <span>La energía baja sola. Para recargarla, <b>responde una pregunta del curso</b>. Si llega a cero, la pregunta es obligatoria.</span></li>
+      <li>📈 <span>Cada 45 s subes de nivel: <b>estructuras → transporte → postcosecha → germinación → interacción entre plantas → fitohormonas</b>. Más nivel, más puntos por respuesta.</span></li>
+    </ul>
+    <div class="field"><label for="nameIn">Tu nombre en el ranking</label><input id="nameIn" maxlength="18" value="" placeholder="Ej.: Ana P." autocomplete="off"></div>
+    <button class="primary" id="btnStart">Entrar al campo</button>
+    <button class="teacher" id="btnProj">Pantalla para proyectar en clase (QR y top 5)</button>
+  </div>
+</div>
+
+<!-- Pantalla para proyectar -->
+<div class="proj" id="proj" hidden>
+  <div class="join">
+    <div class="eyebrow">Botánica y fisiología vegetal · Sala <span id="pSala"></span></div>
+    <h2>Escanea y juega con Mortiñito</h2>
+    <div class="qrbox" id="qr"></div>
+    <div class="url" id="pUrl"></div>
+    <button class="ghost" id="btnProjClose">Volver al juego</button>
+  </div>
+  <div>
+    <h2 style="display:flex;justify-content:space-between;align-items:center;gap:12px">Top 5 del curso <span class="live">En vivo</span></h2>
+    <ol class="top5" id="pTop5"></ol>
+    <p class="meta"><span><b id="pCount">0</b> estudiantes en la sala</span><span id="pMode"></span></p>
+  </div>
+</div>
+
+<!-- Pregunta -->
+<div class="overlay" id="quiz" hidden>
+  <div class="card" role="dialog" aria-modal="true" aria-labelledby="qText">
+    <div class="eyebrow" id="qEyebrow">Recarga de energía</div>
+    <div class="qmeta"><span id="qTopic"></span><span id="qReward"></span></div>
+    <p class="q-text" id="qText"></p>
+    <div class="opts" id="qOpts"></div>
+    <div class="feedback" id="qFb" hidden></div>
+    <button class="primary" id="qNext" hidden>Volver al juego</button>
+  </div>
+</div>
+
+<!-- Resultados -->
+<div class="overlay" id="end" hidden>
+  <div class="card">
+    <div class="eyebrow">Fin de la ronda</div>
+    <h2 id="endTitle">¡Buen trabajo!</h2>
+    <div class="results">
+      <div><strong id="rScore">0</strong><small>Puntaje</small></div>
+      <div><strong id="rRank">#1</strong><small>Posición</small></div>
+      <div><strong id="rQ">0/0</strong><small>Respuestas</small></div>
+    </div>
+    <p id="endMsg"></p>
+    <button class="primary" id="btnAgain">Jugar otra ronda</button>
+  </div>
+</div>
+
+<script>
+// qrcode-generator 1.4.4 (Kazuhiko Arase, licencia MIT), incluido para no depender de servicios externos
+//---------------------------------------------------------------------
+//
+// QR Code Generator for JavaScript
+//
+// Copyright (c) 2009 Kazuhiko Arase
+//
+// URL: http://www.d-project.com/
+//
+// Licensed under the MIT license:
+//  http://www.opensource.org/licenses/mit-license.php
+//
+// The word 'QR Code' is registered trademark of
+// DENSO WAVE INCORPORATED
+//  http://www.denso-wave.com/qrcode/faqpatent-e.html
+//
+//---------------------------------------------------------------------
+
+var qrcode = function() {
+
+  //---------------------------------------------------------------------
+  // qrcode
+  //---------------------------------------------------------------------
+
+  /**
+   * qrcode
+   * @param typeNumber 1 to 40
+   * @param errorCorrectionLevel 'L','M','Q','H'
+   */
+  var qrcode = function(typeNumber, errorCorrectionLevel) {
+
+    var PAD0 = 0xEC;
+    var PAD1 = 0x11;
+
+    var _typeNumber = typeNumber;
+    var _errorCorrectionLevel = QRErrorCorrectionLevel[errorCorrectionLevel];
+    var _modules = null;
+    var _moduleCount = 0;
+    var _dataCache = null;
+    var _dataList = [];
+
+    var _this = {};
+
+    var makeImpl = function(test, maskPattern) {
+
+      _moduleCount = _typeNumber * 4 + 17;
+      _modules = function(moduleCount) {
+        var modules = new Array(moduleCount);
+        for (var row = 0; row < moduleCount; row += 1) {
+          modules[row] = new Array(moduleCount);
+          for (var col = 0; col < moduleCount; col += 1) {
+            modules[row][col] = null;
+          }
+        }
+        return modules;
+      }(_moduleCount);
+
+      setupPositionProbePattern(0, 0);
+      setupPositionProbePattern(_moduleCount - 7, 0);
+      setupPositionProbePattern(0, _moduleCount - 7);
+      setupPositionAdjustPattern();
+      setupTimingPattern();
+      setupTypeInfo(test, maskPattern);
+
+      if (_typeNumber >= 7) {
+        setupTypeNumber(test);
+      }
+
+      if (_dataCache == null) {
+        _dataCache = createData(_typeNumber, _errorCorrectionLevel, _dataList);
+      }
+
+      mapData(_dataCache, maskPattern);
+    };
+
+    var setupPositionProbePattern = function(row, col) {
+
+      for (var r = -1; r <= 7; r += 1) {
+
+        if (row + r <= -1 || _moduleCount <= row + r) continue;
+
+        for (var c = -1; c <= 7; c += 1) {
+
+          if (col + c <= -1 || _moduleCount <= col + c) continue;
+
+          if ( (0 <= r && r <= 6 && (c == 0 || c == 6) )
+              || (0 <= c && c <= 6 && (r == 0 || r == 6) )
+              || (2 <= r && r <= 4 && 2 <= c && c <= 4) ) {
+            _modules[row + r][col + c] = true;
+          } else {
+            _modules[row + r][col + c] = false;
+          }
+        }
+      }
+    };
+
+    var getBestMaskPattern = function() {
+
+      var minLostPoint = 0;
+      var pattern = 0;
+
+      for (var i = 0; i < 8; i += 1) {
+
+        makeImpl(true, i);
+
+        var lostPoint = QRUtil.getLostPoint(_this);
+
+        if (i == 0 || minLostPoint > lostPoint) {
+          minLostPoint = lostPoint;
+          pattern = i;
+        }
+      }
+
+      return pattern;
+    };
+
+    var setupTimingPattern = function() {
+
+      for (var r = 8; r < _moduleCount - 8; r += 1) {
+        if (_modules[r][6] != null) {
+          continue;
+        }
+        _modules[r][6] = (r % 2 == 0);
+      }
+
+      for (var c = 8; c < _moduleCount - 8; c += 1) {
+        if (_modules[6][c] != null) {
+          continue;
+        }
+        _modules[6][c] = (c % 2 == 0);
+      }
+    };
+
+    var setupPositionAdjustPattern = function() {
+
+      var pos = QRUtil.getPatternPosition(_typeNumber);
+
+      for (var i = 0; i < pos.length; i += 1) {
+
+        for (var j = 0; j < pos.length; j += 1) {
+
+          var row = pos[i];
+          var col = pos[j];
+
+          if (_modules[row][col] != null) {
+            continue;
+          }
+
+          for (var r = -2; r <= 2; r += 1) {
+
+            for (var c = -2; c <= 2; c += 1) {
+
+              if (r == -2 || r == 2 || c == -2 || c == 2
+                  || (r == 0 && c == 0) ) {
+                _modules[row + r][col + c] = true;
+              } else {
+                _modules[row + r][col + c] = false;
+              }
+            }
+          }
+        }
+      }
+    };
+
+    var setupTypeNumber = function(test) {
+
+      var bits = QRUtil.getBCHTypeNumber(_typeNumber);
+
+      for (var i = 0; i < 18; i += 1) {
+        var mod = (!test && ( (bits >> i) & 1) == 1);
+        _modules[Math.floor(i / 3)][i % 3 + _moduleCount - 8 - 3] = mod;
+      }
+
+      for (var i = 0; i < 18; i += 1) {
+        var mod = (!test && ( (bits >> i) & 1) == 1);
+        _modules[i % 3 + _moduleCount - 8 - 3][Math.floor(i / 3)] = mod;
+      }
+    };
+
+    var setupTypeInfo = function(test, maskPattern) {
+
+      var data = (_errorCorrectionLevel << 3) | maskPattern;
+      var bits = QRUtil.getBCHTypeInfo(data);
+
+      // vertical
+      for (var i = 0; i < 15; i += 1) {
+
+        var mod = (!test && ( (bits >> i) & 1) == 1);
+
+        if (i < 6) {
+          _modules[i][8] = mod;
+        } else if (i < 8) {
+          _modules[i + 1][8] = mod;
+        } else {
+          _modules[_moduleCount - 15 + i][8] = mod;
+        }
+      }
+
+      // horizontal
+      for (var i = 0; i < 15; i += 1) {
+
+        var mod = (!test && ( (bits >> i) & 1) == 1);
+
+        if (i < 8) {
+          _modules[8][_moduleCount - i - 1] = mod;
+        } else if (i < 9) {
+          _modules[8][15 - i - 1 + 1] = mod;
+        } else {
+          _modules[8][15 - i - 1] = mod;
+        }
+      }
+
+      // fixed module
+      _modules[_moduleCount - 8][8] = (!test);
+    };
+
+    var mapData = function(data, maskPattern) {
+
+      var inc = -1;
+      var row = _moduleCount - 1;
+      var bitIndex = 7;
+      var byteIndex = 0;
+      var maskFunc = QRUtil.getMaskFunction(maskPattern);
+
+      for (var col = _moduleCount - 1; col > 0; col -= 2) {
+
+        if (col == 6) col -= 1;
+
+        while (true) {
+
+          for (var c = 0; c < 2; c += 1) {
+
+            if (_modules[row][col - c] == null) {
+
+              var dark = false;
+
+              if (byteIndex < data.length) {
+                dark = ( ( (data[byteIndex] >>> bitIndex) & 1) == 1);
+              }
+
+              var mask = maskFunc(row, col - c);
+
+              if (mask) {
+                dark = !dark;
+              }
+
+              _modules[row][col - c] = dark;
+              bitIndex -= 1;
+
+              if (bitIndex == -1) {
+                byteIndex += 1;
+                bitIndex = 7;
+              }
+            }
+          }
+
+          row += inc;
+
+          if (row < 0 || _moduleCount <= row) {
+            row -= inc;
+            inc = -inc;
+            break;
+          }
+        }
+      }
+    };
+
+    var createBytes = function(buffer, rsBlocks) {
+
+      var offset = 0;
+
+      var maxDcCount = 0;
+      var maxEcCount = 0;
+
+      var dcdata = new Array(rsBlocks.length);
+      var ecdata = new Array(rsBlocks.length);
+
+      for (var r = 0; r < rsBlocks.length; r += 1) {
+
+        var dcCount = rsBlocks[r].dataCount;
+        var ecCount = rsBlocks[r].totalCount - dcCount;
+
+        maxDcCount = Math.max(maxDcCount, dcCount);
+        maxEcCount = Math.max(maxEcCount, ecCount);
+
+        dcdata[r] = new Array(dcCount);
+
+        for (var i = 0; i < dcdata[r].length; i += 1) {
+          dcdata[r][i] = 0xff & buffer.getBuffer()[i + offset];
+        }
+        offset += dcCount;
+
+        var rsPoly = QRUtil.getErrorCorrectPolynomial(ecCount);
+        var rawPoly = qrPolynomial(dcdata[r], rsPoly.getLength() - 1);
+
+        var modPoly = rawPoly.mod(rsPoly);
+        ecdata[r] = new Array(rsPoly.getLength() - 1);
+        for (var i = 0; i < ecdata[r].length; i += 1) {
+          var modIndex = i + modPoly.getLength() - ecdata[r].length;
+          ecdata[r][i] = (modIndex >= 0)? modPoly.getAt(modIndex) : 0;
+        }
+      }
+
+      var totalCodeCount = 0;
+      for (var i = 0; i < rsBlocks.length; i += 1) {
+        totalCodeCount += rsBlocks[i].totalCount;
+      }
+
+      var data = new Array(totalCodeCount);
+      var index = 0;
+
+      for (var i = 0; i < maxDcCount; i += 1) {
+        for (var r = 0; r < rsBlocks.length; r += 1) {
+          if (i < dcdata[r].length) {
+            data[index] = dcdata[r][i];
+            index += 1;
+          }
+        }
+      }
+
+      for (var i = 0; i < maxEcCount; i += 1) {
+        for (var r = 0; r < rsBlocks.length; r += 1) {
+          if (i < ecdata[r].length) {
+            data[index] = ecdata[r][i];
+            index += 1;
+          }
+        }
+      }
+
+      return data;
+    };
+
+    var createData = function(typeNumber, errorCorrectionLevel, dataList) {
+
+      var rsBlocks = QRRSBlock.getRSBlocks(typeNumber, errorCorrectionLevel);
+
+      var buffer = qrBitBuffer();
+
+      for (var i = 0; i < dataList.length; i += 1) {
+        var data = dataList[i];
+        buffer.put(data.getMode(), 4);
+        buffer.put(data.getLength(), QRUtil.getLengthInBits(data.getMode(), typeNumber) );
+        data.write(buffer);
+      }
+
+      // calc num max data.
+      var totalDataCount = 0;
+      for (var i = 0; i < rsBlocks.length; i += 1) {
+        totalDataCount += rsBlocks[i].dataCount;
+      }
+
+      if (buffer.getLengthInBits() > totalDataCount * 8) {
+        throw 'code length overflow. ('
+          + buffer.getLengthInBits()
+          + '>'
+          + totalDataCount * 8
+          + ')';
+      }
+
+      // end code
+      if (buffer.getLengthInBits() + 4 <= totalDataCount * 8) {
+        buffer.put(0, 4);
+      }
+
+      // padding
+      while (buffer.getLengthInBits() % 8 != 0) {
+        buffer.putBit(false);
+      }
+
+      // padding
+      while (true) {
+
+        if (buffer.getLengthInBits() >= totalDataCount * 8) {
+          break;
+        }
+        buffer.put(PAD0, 8);
+
+        if (buffer.getLengthInBits() >= totalDataCount * 8) {
+          break;
+        }
+        buffer.put(PAD1, 8);
+      }
+
+      return createBytes(buffer, rsBlocks);
+    };
+
+    _this.addData = function(data, mode) {
+
+      mode = mode || 'Byte';
+
+      var newData = null;
+
+      switch(mode) {
+      case 'Numeric' :
+        newData = qrNumber(data);
+        break;
+      case 'Alphanumeric' :
+        newData = qrAlphaNum(data);
+        break;
+      case 'Byte' :
+        newData = qr8BitByte(data);
+        break;
+      case 'Kanji' :
+        newData = qrKanji(data);
+        break;
+      default :
+        throw 'mode:' + mode;
+      }
+
+      _dataList.push(newData);
+      _dataCache = null;
+    };
+
+    _this.isDark = function(row, col) {
+      if (row < 0 || _moduleCount <= row || col < 0 || _moduleCount <= col) {
+        throw row + ',' + col;
+      }
+      return _modules[row][col];
+    };
+
+    _this.getModuleCount = function() {
+      return _moduleCount;
+    };
+
+    _this.make = function() {
+      if (_typeNumber < 1) {
+        var typeNumber = 1;
+
+        for (; typeNumber < 40; typeNumber++) {
+          var rsBlocks = QRRSBlock.getRSBlocks(typeNumber, _errorCorrectionLevel);
+          var buffer = qrBitBuffer();
+
+          for (var i = 0; i < _dataList.length; i++) {
+            var data = _dataList[i];
+            buffer.put(data.getMode(), 4);
+            buffer.put(data.getLength(), QRUtil.getLengthInBits(data.getMode(), typeNumber) );
+            data.write(buffer);
+          }
+
+          var totalDataCount = 0;
+          for (var i = 0; i < rsBlocks.length; i++) {
+            totalDataCount += rsBlocks[i].dataCount;
+          }
+
+          if (buffer.getLengthInBits() <= totalDataCount * 8) {
+            break;
+          }
+        }
+
+        _typeNumber = typeNumber;
+      }
+
+      makeImpl(false, getBestMaskPattern() );
+    };
+
+    _this.createTableTag = function(cellSize, margin) {
+
+      cellSize = cellSize || 2;
+      margin = (typeof margin == 'undefined')? cellSize * 4 : margin;
+
+      var qrHtml = '';
+
+      qrHtml += '<table style="';
+      qrHtml += ' border-width: 0px; border-style: none;';
+      qrHtml += ' border-collapse: collapse;';
+      qrHtml += ' padding: 0px; margin: ' + margin + 'px;';
+      qrHtml += '">';
+      qrHtml += '<tbody>';
+
+      for (var r = 0; r < _this.getModuleCount(); r += 1) {
+
+        qrHtml += '<tr>';
+
+        for (var c = 0; c < _this.getModuleCount(); c += 1) {
+          qrHtml += '<td style="';
+          qrHtml += ' border-width: 0px; border-style: none;';
+          qrHtml += ' border-collapse: collapse;';
+          qrHtml += ' padding: 0px; margin: 0px;';
+          qrHtml += ' width: ' + cellSize + 'px;';
+          qrHtml += ' height: ' + cellSize + 'px;';
+          qrHtml += ' background-color: ';
+          qrHtml += _this.isDark(r, c)? '#000000' : '#ffffff';
+          qrHtml += ';';
+          qrHtml += '"/>';
+        }
+
+        qrHtml += '</tr>';
+      }
+
+      qrHtml += '</tbody>';
+      qrHtml += '</table>';
+
+      return qrHtml;
+    };
+
+    _this.createSvgTag = function(cellSize, margin, alt, title) {
+
+      var opts = {};
+      if (typeof arguments[0] == 'object') {
+        // Called by options.
+        opts = arguments[0];
+        // overwrite cellSize and margin.
+        cellSize = opts.cellSize;
+        margin = opts.margin;
+        alt = opts.alt;
+        title = opts.title;
+      }
+
+      cellSize = cellSize || 2;
+      margin = (typeof margin == 'undefined')? cellSize * 4 : margin;
+
+      // Compose alt property surrogate
+      alt = (typeof alt === 'string') ? {text: alt} : alt || {};
+      alt.text = alt.text || null;
+      alt.id = (alt.text) ? alt.id || 'qrcode-description' : null;
+
+      // Compose title property surrogate
+      title = (typeof title === 'string') ? {text: title} : title || {};
+      title.text = title.text || null;
+      title.id = (title.text) ? title.id || 'qrcode-title' : null;
+
+      var size = _this.getModuleCount() * cellSize + margin * 2;
+      var c, mc, r, mr, qrSvg='', rect;
+
+      rect = 'l' + cellSize + ',0 0,' + cellSize +
+        ' -' + cellSize + ',0 0,-' + cellSize + 'z ';
+
+      qrSvg += '<svg version="1.1" xmlns="http://www.w3.org/2000/svg"';
+      qrSvg += !opts.scalable ? ' width="' + size + 'px" height="' + size + 'px"' : '';
+      qrSvg += ' viewBox="0 0 ' + size + ' ' + size + '" ';
+      qrSvg += ' preserveAspectRatio="xMinYMin meet"';
+      qrSvg += (title.text || alt.text) ? ' role="img" aria-labelledby="' +
+          escapeXml([title.id, alt.id].join(' ').trim() ) + '"' : '';
+      qrSvg += '>';
+      qrSvg += (title.text) ? '<title id="' + escapeXml(title.id) + '">' +
+          escapeXml(title.text) + '</title>' : '';
+      qrSvg += (alt.text) ? '<description id="' + escapeXml(alt.id) + '">' +
+          escapeXml(alt.text) + '</description>' : '';
+      qrSvg += '<rect width="100%" height="100%" fill="white" cx="0" cy="0"/>';
+      qrSvg += '<path d="';
+
+      for (r = 0; r < _this.getModuleCount(); r += 1) {
+        mr = r * cellSize + margin;
+        for (c = 0; c < _this.getModuleCount(); c += 1) {
+          if (_this.isDark(r, c) ) {
+            mc = c*cellSize+margin;
+            qrSvg += 'M' + mc + ',' + mr + rect;
+          }
+        }
+      }
+
+      qrSvg += '" stroke="transparent" fill="black"/>';
+      qrSvg += '</svg>';
+
+      return qrSvg;
+    };
+
+    _this.createDataURL = function(cellSize, margin) {
+
+      cellSize = cellSize || 2;
+      margin = (typeof margin == 'undefined')? cellSize * 4 : margin;
+
+      var size = _this.getModuleCount() * cellSize + margin * 2;
+      var min = margin;
+      var max = size - margin;
+
+      return createDataURL(size, size, function(x, y) {
+        if (min <= x && x < max && min <= y && y < max) {
+          var c = Math.floor( (x - min) / cellSize);
+          var r = Math.floor( (y - min) / cellSize);
+          return _this.isDark(r, c)? 0 : 1;
+        } else {
+          return 1;
+        }
+      } );
+    };
+
+    _this.createImgTag = function(cellSize, margin, alt) {
+
+      cellSize = cellSize || 2;
+      margin = (typeof margin == 'undefined')? cellSize * 4 : margin;
+
+      var size = _this.getModuleCount() * cellSize + margin * 2;
+
+      var img = '';
+      img += '<img';
+      img += '\u0020src="';
+      img += _this.createDataURL(cellSize, margin);
+      img += '"';
+      img += '\u0020width="';
+      img += size;
+      img += '"';
+      img += '\u0020height="';
+      img += size;
+      img += '"';
+      if (alt) {
+        img += '\u0020alt="';
+        img += escapeXml(alt);
+        img += '"';
+      }
+      img += '/>';
+
+      return img;
+    };
+
+    var escapeXml = function(s) {
+      var escaped = '';
+      for (var i = 0; i < s.length; i += 1) {
+        var c = s.charAt(i);
+        switch(c) {
+        case '<': escaped += '&lt;'; break;
+        case '>': escaped += '&gt;'; break;
+        case '&': escaped += '&amp;'; break;
+        case '"': escaped += '&quot;'; break;
+        default : escaped += c; break;
+        }
+      }
+      return escaped;
+    };
+
+    var _createHalfASCII = function(margin) {
+      var cellSize = 1;
+      margin = (typeof margin == 'undefined')? cellSize * 2 : margin;
+
+      var size = _this.getModuleCount() * cellSize + margin * 2;
+      var min = margin;
+      var max = size - margin;
+
+      var y, x, r1, r2, p;
+
+      var blocks = {
+        '██': '█',
+        '█ ': '▀',
+        ' █': '▄',
+        '  ': ' '
+      };
+
+      var blocksLastLineNoMargin = {
+        '██': '▀',
+        '█ ': '▀',
+        ' █': ' ',
+        '  ': ' '
+      };
+
+      var ascii = '';
+      for (y = 0; y < size; y += 2) {
+        r1 = Math.floor((y - min) / cellSize);
+        r2 = Math.floor((y + 1 - min) / cellSize);
+        for (x = 0; x < size; x += 1) {
+          p = '█';
+
+          if (min <= x && x < max && min <= y && y < max && _this.isDark(r1, Math.floor((x - min) / cellSize))) {
+            p = ' ';
+          }
+
+          if (min <= x && x < max && min <= y+1 && y+1 < max && _this.isDark(r2, Math.floor((x - min) / cellSize))) {
+            p += ' ';
+          }
+          else {
+            p += '█';
+          }
+
+          // Output 2 characters per pixel, to create full square. 1 character per pixels gives only half width of square.
+          ascii += (margin < 1 && y+1 >= max) ? blocksLastLineNoMargin[p] : blocks[p];
+        }
+
+        ascii += '\n';
+      }
+
+      if (size % 2 && margin > 0) {
+        return ascii.substring(0, ascii.length - size - 1) + Array(size+1).join('▀');
+      }
+
+      return ascii.substring(0, ascii.length-1);
+    };
+
+    _this.createASCII = function(cellSize, margin) {
+      cellSize = cellSize || 1;
+
+      if (cellSize < 2) {
+        return _createHalfASCII(margin);
+      }
+
+      cellSize -= 1;
+      margin = (typeof margin == 'undefined')? cellSize * 2 : margin;
+
+      var size = _this.getModuleCount() * cellSize + margin * 2;
+      var min = margin;
+      var max = size - margin;
+
+      var y, x, r, p;
+
+      var white = Array(cellSize+1).join('██');
+      var black = Array(cellSize+1).join('  ');
+
+      var ascii = '';
+      var line = '';
+      for (y = 0; y < size; y += 1) {
+        r = Math.floor( (y - min) / cellSize);
+        line = '';
+        for (x = 0; x < size; x += 1) {
+          p = 1;
+
+          if (min <= x && x < max && min <= y && y < max && _this.isDark(r, Math.floor((x - min) / cellSize))) {
+            p = 0;
+          }
+
+          // Output 2 characters per pixel, to create full square. 1 character per pixels gives only half width of square.
+          line += p ? white : black;
+        }
+
+        for (r = 0; r < cellSize; r += 1) {
+          ascii += line + '\n';
+        }
+      }
+
+      return ascii.substring(0, ascii.length-1);
+    };
+
+    _this.renderTo2dContext = function(context, cellSize) {
+      cellSize = cellSize || 2;
+      var length = _this.getModuleCount();
+      for (var row = 0; row < length; row++) {
+        for (var col = 0; col < length; col++) {
+          context.fillStyle = _this.isDark(row, col) ? 'black' : 'white';
+          context.fillRect(row * cellSize, col * cellSize, cellSize, cellSize);
+        }
+      }
+    }
+
+    return _this;
+  };
+
+  //---------------------------------------------------------------------
+  // qrcode.stringToBytes
+  //---------------------------------------------------------------------
+
+  qrcode.stringToBytesFuncs = {
+    'default' : function(s) {
+      var bytes = [];
+      for (var i = 0; i < s.length; i += 1) {
+        var c = s.charCodeAt(i);
+        bytes.push(c & 0xff);
+      }
+      return bytes;
+    }
+  };
+
+  qrcode.stringToBytes = qrcode.stringToBytesFuncs['default'];
+
+  //---------------------------------------------------------------------
+  // qrcode.createStringToBytes
+  //---------------------------------------------------------------------
+
+  /**
+   * @param unicodeData base64 string of byte array.
+   * [16bit Unicode],[16bit Bytes], ...
+   * @param numChars
+   */
+  qrcode.createStringToBytes = function(unicodeData, numChars) {
+
+    // create conversion map.
+
+    var unicodeMap = function() {
+
+      var bin = base64DecodeInputStream(unicodeData);
+      var read = function() {
+        var b = bin.read();
+        if (b == -1) throw 'eof';
+        return b;
+      };
+
+      var count = 0;
+      var unicodeMap = {};
+      while (true) {
+        var b0 = bin.read();
+        if (b0 == -1) break;
+        var b1 = read();
+        var b2 = read();
+        var b3 = read();
+        var k = String.fromCharCode( (b0 << 8) | b1);
+        var v = (b2 << 8) | b3;
+        unicodeMap[k] = v;
+        count += 1;
+      }
+      if (count != numChars) {
+        throw count + ' != ' + numChars;
+      }
+
+      return unicodeMap;
+    }();
+
+    var unknownChar = '?'.charCodeAt(0);
+
+    return function(s) {
+      var bytes = [];
+      for (var i = 0; i < s.length; i += 1) {
+        var c = s.charCodeAt(i);
+        if (c < 128) {
+          bytes.push(c);
+        } else {
+          var b = unicodeMap[s.charAt(i)];
+          if (typeof b == 'number') {
+            if ( (b & 0xff) == b) {
+              // 1byte
+              bytes.push(b);
+            } else {
+              // 2bytes
+              bytes.push(b >>> 8);
+              bytes.push(b & 0xff);
+            }
+          } else {
+            bytes.push(unknownChar);
+          }
+        }
+      }
+      return bytes;
+    };
+  };
+
+  //---------------------------------------------------------------------
+  // QRMode
+  //---------------------------------------------------------------------
+
+  var QRMode = {
+    MODE_NUMBER :    1 << 0,
+    MODE_ALPHA_NUM : 1 << 1,
+    MODE_8BIT_BYTE : 1 << 2,
+    MODE_KANJI :     1 << 3
+  };
+
+  //---------------------------------------------------------------------
+  // QRErrorCorrectionLevel
+  //---------------------------------------------------------------------
+
+  var QRErrorCorrectionLevel = {
+    L : 1,
+    M : 0,
+    Q : 3,
+    H : 2
+  };
+
+  //---------------------------------------------------------------------
+  // QRMaskPattern
+  //---------------------------------------------------------------------
+
+  var QRMaskPattern = {
+    PATTERN000 : 0,
+    PATTERN001 : 1,
+    PATTERN010 : 2,
+    PATTERN011 : 3,
+    PATTERN100 : 4,
+    PATTERN101 : 5,
+    PATTERN110 : 6,
+    PATTERN111 : 7
+  };
+
+  //---------------------------------------------------------------------
+  // QRUtil
+  //---------------------------------------------------------------------
+
+  var QRUtil = function() {
+
+    var PATTERN_POSITION_TABLE = [
+      [],
+      [6, 18],
+      [6, 22],
+      [6, 26],
+      [6, 30],
+      [6, 34],
+      [6, 22, 38],
+      [6, 24, 42],
+      [6, 26, 46],
+      [6, 28, 50],
+      [6, 30, 54],
+      [6, 32, 58],
+      [6, 34, 62],
+      [6, 26, 46, 66],
+      [6, 26, 48, 70],
+      [6, 26, 50, 74],
+      [6, 30, 54, 78],
+      [6, 30, 56, 82],
+      [6, 30, 58, 86],
+      [6, 34, 62, 90],
+      [6, 28, 50, 72, 94],
+      [6, 26, 50, 74, 98],
+      [6, 30, 54, 78, 102],
+      [6, 28, 54, 80, 106],
+      [6, 32, 58, 84, 110],
+      [6, 30, 58, 86, 114],
+      [6, 34, 62, 90, 118],
+      [6, 26, 50, 74, 98, 122],
+      [6, 30, 54, 78, 102, 126],
+      [6, 26, 52, 78, 104, 130],
+      [6, 30, 56, 82, 108, 134],
+      [6, 34, 60, 86, 112, 138],
+      [6, 30, 58, 86, 114, 142],
+      [6, 34, 62, 90, 118, 146],
+      [6, 30, 54, 78, 102, 126, 150],
+      [6, 24, 50, 76, 102, 128, 154],
+      [6, 28, 54, 80, 106, 132, 158],
+      [6, 32, 58, 84, 110, 136, 162],
+      [6, 26, 54, 82, 110, 138, 166],
+      [6, 30, 58, 86, 114, 142, 170]
+    ];
+    var G15 = (1 << 10) | (1 << 8) | (1 << 5) | (1 << 4) | (1 << 2) | (1 << 1) | (1 << 0);
+    var G18 = (1 << 12) | (1 << 11) | (1 << 10) | (1 << 9) | (1 << 8) | (1 << 5) | (1 << 2) | (1 << 0);
+    var G15_MASK = (1 << 14) | (1 << 12) | (1 << 10) | (1 << 4) | (1 << 1);
+
+    var _this = {};
+
+    var getBCHDigit = function(data) {
+      var digit = 0;
+      while (data != 0) {
+        digit += 1;
+        data >>>= 1;
+      }
+      return digit;
+    };
+
+    _this.getBCHTypeInfo = function(data) {
+      var d = data << 10;
+      while (getBCHDigit(d) - getBCHDigit(G15) >= 0) {
+        d ^= (G15 << (getBCHDigit(d) - getBCHDigit(G15) ) );
+      }
+      return ( (data << 10) | d) ^ G15_MASK;
+    };
+
+    _this.getBCHTypeNumber = function(data) {
+      var d = data << 12;
+      while (getBCHDigit(d) - getBCHDigit(G18) >= 0) {
+        d ^= (G18 << (getBCHDigit(d) - getBCHDigit(G18) ) );
+      }
+      return (data << 12) | d;
+    };
+
+    _this.getPatternPosition = function(typeNumber) {
+      return PATTERN_POSITION_TABLE[typeNumber - 1];
+    };
+
+    _this.getMaskFunction = function(maskPattern) {
+
+      switch (maskPattern) {
+
+      case QRMaskPattern.PATTERN000 :
+        return function(i, j) { return (i + j) % 2 == 0; };
+      case QRMaskPattern.PATTERN001 :
+        return function(i, j) { return i % 2 == 0; };
+      case QRMaskPattern.PATTERN010 :
+        return function(i, j) { return j % 3 == 0; };
+      case QRMaskPattern.PATTERN011 :
+        return function(i, j) { return (i + j) % 3 == 0; };
+      case QRMaskPattern.PATTERN100 :
+        return function(i, j) { return (Math.floor(i / 2) + Math.floor(j / 3) ) % 2 == 0; };
+      case QRMaskPattern.PATTERN101 :
+        return function(i, j) { return (i * j) % 2 + (i * j) % 3 == 0; };
+      case QRMaskPattern.PATTERN110 :
+        return function(i, j) { return ( (i * j) % 2 + (i * j) % 3) % 2 == 0; };
+      case QRMaskPattern.PATTERN111 :
+        return function(i, j) { return ( (i * j) % 3 + (i + j) % 2) % 2 == 0; };
+
+      default :
+        throw 'bad maskPattern:' + maskPattern;
+      }
+    };
+
+    _this.getErrorCorrectPolynomial = function(errorCorrectLength) {
+      var a = qrPolynomial([1], 0);
+      for (var i = 0; i < errorCorrectLength; i += 1) {
+        a = a.multiply(qrPolynomial([1, QRMath.gexp(i)], 0) );
+      }
+      return a;
+    };
+
+    _this.getLengthInBits = function(mode, type) {
+
+      if (1 <= type && type < 10) {
+
+        // 1 - 9
+
+        switch(mode) {
+        case QRMode.MODE_NUMBER    : return 10;
+        case QRMode.MODE_ALPHA_NUM : return 9;
+        case QRMode.MODE_8BIT_BYTE : return 8;
+        case QRMode.MODE_KANJI     : return 8;
+        default :
+          throw 'mode:' + mode;
+        }
+
+      } else if (type < 27) {
+
+        // 10 - 26
+
+        switch(mode) {
+        case QRMode.MODE_NUMBER    : return 12;
+        case QRMode.MODE_ALPHA_NUM : return 11;
+        case QRMode.MODE_8BIT_BYTE : return 16;
+        case QRMode.MODE_KANJI     : return 10;
+        default :
+          throw 'mode:' + mode;
+        }
+
+      } else if (type < 41) {
+
+        // 27 - 40
+
+        switch(mode) {
+        case QRMode.MODE_NUMBER    : return 14;
+        case QRMode.MODE_ALPHA_NUM : return 13;
+        case QRMode.MODE_8BIT_BYTE : return 16;
+        case QRMode.MODE_KANJI     : return 12;
+        default :
+          throw 'mode:' + mode;
+        }
+
+      } else {
+        throw 'type:' + type;
+      }
+    };
+
+    _this.getLostPoint = function(qrcode) {
+
+      var moduleCount = qrcode.getModuleCount();
+
+      var lostPoint = 0;
+
+      // LEVEL1
+
+      for (var row = 0; row < moduleCount; row += 1) {
+        for (var col = 0; col < moduleCount; col += 1) {
+
+          var sameCount = 0;
+          var dark = qrcode.isDark(row, col);
+
+          for (var r = -1; r <= 1; r += 1) {
+
+            if (row + r < 0 || moduleCount <= row + r) {
+              continue;
+            }
+
+            for (var c = -1; c <= 1; c += 1) {
+
+              if (col + c < 0 || moduleCount <= col + c) {
+                continue;
+              }
+
+              if (r == 0 && c == 0) {
+                continue;
+              }
+
+              if (dark == qrcode.isDark(row + r, col + c) ) {
+                sameCount += 1;
+              }
+            }
+          }
+
+          if (sameCount > 5) {
+            lostPoint += (3 + sameCount - 5);
+          }
+        }
+      };
+
+      // LEVEL2
+
+      for (var row = 0; row < moduleCount - 1; row += 1) {
+        for (var col = 0; col < moduleCount - 1; col += 1) {
+          var count = 0;
+          if (qrcode.isDark(row, col) ) count += 1;
+          if (qrcode.isDark(row + 1, col) ) count += 1;
+          if (qrcode.isDark(row, col + 1) ) count += 1;
+          if (qrcode.isDark(row + 1, col + 1) ) count += 1;
+          if (count == 0 || count == 4) {
+            lostPoint += 3;
+          }
+        }
+      }
+
+      // LEVEL3
+
+      for (var row = 0; row < moduleCount; row += 1) {
+        for (var col = 0; col < moduleCount - 6; col += 1) {
+          if (qrcode.isDark(row, col)
+              && !qrcode.isDark(row, col + 1)
+              &&  qrcode.isDark(row, col + 2)
+              &&  qrcode.isDark(row, col + 3)
+              &&  qrcode.isDark(row, col + 4)
+              && !qrcode.isDark(row, col + 5)
+              &&  qrcode.isDark(row, col + 6) ) {
+            lostPoint += 40;
+          }
+        }
+      }
+
+      for (var col = 0; col < moduleCount; col += 1) {
+        for (var row = 0; row < moduleCount - 6; row += 1) {
+          if (qrcode.isDark(row, col)
+              && !qrcode.isDark(row + 1, col)
+              &&  qrcode.isDark(row + 2, col)
+              &&  qrcode.isDark(row + 3, col)
+              &&  qrcode.isDark(row + 4, col)
+              && !qrcode.isDark(row + 5, col)
+              &&  qrcode.isDark(row + 6, col) ) {
+            lostPoint += 40;
+          }
+        }
+      }
+
+      // LEVEL4
+
+      var darkCount = 0;
+
+      for (var col = 0; col < moduleCount; col += 1) {
+        for (var row = 0; row < moduleCount; row += 1) {
+          if (qrcode.isDark(row, col) ) {
+            darkCount += 1;
+          }
+        }
+      }
+
+      var ratio = Math.abs(100 * darkCount / moduleCount / moduleCount - 50) / 5;
+      lostPoint += ratio * 10;
+
+      return lostPoint;
+    };
+
+    return _this;
+  }();
+
+  //---------------------------------------------------------------------
+  // QRMath
+  //---------------------------------------------------------------------
+
+  var QRMath = function() {
+
+    var EXP_TABLE = new Array(256);
+    var LOG_TABLE = new Array(256);
+
+    // initialize tables
+    for (var i = 0; i < 8; i += 1) {
+      EXP_TABLE[i] = 1 << i;
+    }
+    for (var i = 8; i < 256; i += 1) {
+      EXP_TABLE[i] = EXP_TABLE[i - 4]
+        ^ EXP_TABLE[i - 5]
+        ^ EXP_TABLE[i - 6]
+        ^ EXP_TABLE[i - 8];
+    }
+    for (var i = 0; i < 255; i += 1) {
+      LOG_TABLE[EXP_TABLE[i] ] = i;
+    }
+
+    var _this = {};
+
+    _this.glog = function(n) {
+
+      if (n < 1) {
+        throw 'glog(' + n + ')';
+      }
+
+      return LOG_TABLE[n];
+    };
+
+    _this.gexp = function(n) {
+
+      while (n < 0) {
+        n += 255;
+      }
+
+      while (n >= 256) {
+        n -= 255;
+      }
+
+      return EXP_TABLE[n];
+    };
+
+    return _this;
+  }();
+
+  //---------------------------------------------------------------------
+  // qrPolynomial
+  //---------------------------------------------------------------------
+
+  function qrPolynomial(num, shift) {
+
+    if (typeof num.length == 'undefined') {
+      throw num.length + '/' + shift;
+    }
+
+    var _num = function() {
+      var offset = 0;
+      while (offset < num.length && num[offset] == 0) {
+        offset += 1;
+      }
+      var _num = new Array(num.length - offset + shift);
+      for (var i = 0; i < num.length - offset; i += 1) {
+        _num[i] = num[i + offset];
+      }
+      return _num;
+    }();
+
+    var _this = {};
+
+    _this.getAt = function(index) {
+      return _num[index];
+    };
+
+    _this.getLength = function() {
+      return _num.length;
+    };
+
+    _this.multiply = function(e) {
+
+      var num = new Array(_this.getLength() + e.getLength() - 1);
+
+      for (var i = 0; i < _this.getLength(); i += 1) {
+        for (var j = 0; j < e.getLength(); j += 1) {
+          num[i + j] ^= QRMath.gexp(QRMath.glog(_this.getAt(i) ) + QRMath.glog(e.getAt(j) ) );
+        }
+      }
+
+      return qrPolynomial(num, 0);
+    };
+
+    _this.mod = function(e) {
+
+      if (_this.getLength() - e.getLength() < 0) {
+        return _this;
+      }
+
+      var ratio = QRMath.glog(_this.getAt(0) ) - QRMath.glog(e.getAt(0) );
+
+      var num = new Array(_this.getLength() );
+      for (var i = 0; i < _this.getLength(); i += 1) {
+        num[i] = _this.getAt(i);
+      }
+
+      for (var i = 0; i < e.getLength(); i += 1) {
+        num[i] ^= QRMath.gexp(QRMath.glog(e.getAt(i) ) + ratio);
+      }
+
+      // recursive call
+      return qrPolynomial(num, 0).mod(e);
+    };
+
+    return _this;
+  };
+
+  //---------------------------------------------------------------------
+  // QRRSBlock
+  //---------------------------------------------------------------------
+
+  var QRRSBlock = function() {
+
+    var RS_BLOCK_TABLE = [
+
+      // L
+      // M
+      // Q
+      // H
+
+      // 1
+      [1, 26, 19],
+      [1, 26, 16],
+      [1, 26, 13],
+      [1, 26, 9],
+
+      // 2
+      [1, 44, 34],
+      [1, 44, 28],
+      [1, 44, 22],
+      [1, 44, 16],
+
+      // 3
+      [1, 70, 55],
+      [1, 70, 44],
+      [2, 35, 17],
+      [2, 35, 13],
+
+      // 4
+      [1, 100, 80],
+      [2, 50, 32],
+      [2, 50, 24],
+      [4, 25, 9],
+
+      // 5
+      [1, 134, 108],
+      [2, 67, 43],
+      [2, 33, 15, 2, 34, 16],
+      [2, 33, 11, 2, 34, 12],
+
+      // 6
+      [2, 86, 68],
+      [4, 43, 27],
+      [4, 43, 19],
+      [4, 43, 15],
+
+      // 7
+      [2, 98, 78],
+      [4, 49, 31],
+      [2, 32, 14, 4, 33, 15],
+      [4, 39, 13, 1, 40, 14],
+
+      // 8
+      [2, 121, 97],
+      [2, 60, 38, 2, 61, 39],
+      [4, 40, 18, 2, 41, 19],
+      [4, 40, 14, 2, 41, 15],
+
+      // 9
+      [2, 146, 116],
+      [3, 58, 36, 2, 59, 37],
+      [4, 36, 16, 4, 37, 17],
+      [4, 36, 12, 4, 37, 13],
+
+      // 10
+      [2, 86, 68, 2, 87, 69],
+      [4, 69, 43, 1, 70, 44],
+      [6, 43, 19, 2, 44, 20],
+      [6, 43, 15, 2, 44, 16],
+
+      // 11
+      [4, 101, 81],
+      [1, 80, 50, 4, 81, 51],
+      [4, 50, 22, 4, 51, 23],
+      [3, 36, 12, 8, 37, 13],
+
+      // 12
+      [2, 116, 92, 2, 117, 93],
+      [6, 58, 36, 2, 59, 37],
+      [4, 46, 20, 6, 47, 21],
+      [7, 42, 14, 4, 43, 15],
+
+      // 13
+      [4, 133, 107],
+      [8, 59, 37, 1, 60, 38],
+      [8, 44, 20, 4, 45, 21],
+      [12, 33, 11, 4, 34, 12],
+
+      // 14
+      [3, 145, 115, 1, 146, 116],
+      [4, 64, 40, 5, 65, 41],
+      [11, 36, 16, 5, 37, 17],
+      [11, 36, 12, 5, 37, 13],
+
+      // 15
+      [5, 109, 87, 1, 110, 88],
+      [5, 65, 41, 5, 66, 42],
+      [5, 54, 24, 7, 55, 25],
+      [11, 36, 12, 7, 37, 13],
+
+      // 16
+      [5, 122, 98, 1, 123, 99],
+      [7, 73, 45, 3, 74, 46],
+      [15, 43, 19, 2, 44, 20],
+      [3, 45, 15, 13, 46, 16],
+
+      // 17
+      [1, 135, 107, 5, 136, 108],
+      [10, 74, 46, 1, 75, 47],
+      [1, 50, 22, 15, 51, 23],
+      [2, 42, 14, 17, 43, 15],
+
+      // 18
+      [5, 150, 120, 1, 151, 121],
+      [9, 69, 43, 4, 70, 44],
+      [17, 50, 22, 1, 51, 23],
+      [2, 42, 14, 19, 43, 15],
+
+      // 19
+      [3, 141, 113, 4, 142, 114],
+      [3, 70, 44, 11, 71, 45],
+      [17, 47, 21, 4, 48, 22],
+      [9, 39, 13, 16, 40, 14],
+
+      // 20
+      [3, 135, 107, 5, 136, 108],
+      [3, 67, 41, 13, 68, 42],
+      [15, 54, 24, 5, 55, 25],
+      [15, 43, 15, 10, 44, 16],
+
+      // 21
+      [4, 144, 116, 4, 145, 117],
+      [17, 68, 42],
+      [17, 50, 22, 6, 51, 23],
+      [19, 46, 16, 6, 47, 17],
+
+      // 22
+      [2, 139, 111, 7, 140, 112],
+      [17, 74, 46],
+      [7, 54, 24, 16, 55, 25],
+      [34, 37, 13],
+
+      // 23
+      [4, 151, 121, 5, 152, 122],
+      [4, 75, 47, 14, 76, 48],
+      [11, 54, 24, 14, 55, 25],
+      [16, 45, 15, 14, 46, 16],
+
+      // 24
+      [6, 147, 117, 4, 148, 118],
+      [6, 73, 45, 14, 74, 46],
+      [11, 54, 24, 16, 55, 25],
+      [30, 46, 16, 2, 47, 17],
+
+      // 25
+      [8, 132, 106, 4, 133, 107],
+      [8, 75, 47, 13, 76, 48],
+      [7, 54, 24, 22, 55, 25],
+      [22, 45, 15, 13, 46, 16],
+
+      // 26
+      [10, 142, 114, 2, 143, 115],
+      [19, 74, 46, 4, 75, 47],
+      [28, 50, 22, 6, 51, 23],
+      [33, 46, 16, 4, 47, 17],
+
+      // 27
+      [8, 152, 122, 4, 153, 123],
+      [22, 73, 45, 3, 74, 46],
+      [8, 53, 23, 26, 54, 24],
+      [12, 45, 15, 28, 46, 16],
+
+      // 28
+      [3, 147, 117, 10, 148, 118],
+      [3, 73, 45, 23, 74, 46],
+      [4, 54, 24, 31, 55, 25],
+      [11, 45, 15, 31, 46, 16],
+
+      // 29
+      [7, 146, 116, 7, 147, 117],
+      [21, 73, 45, 7, 74, 46],
+      [1, 53, 23, 37, 54, 24],
+      [19, 45, 15, 26, 46, 16],
+
+      // 30
+      [5, 145, 115, 10, 146, 116],
+      [19, 75, 47, 10, 76, 48],
+      [15, 54, 24, 25, 55, 25],
+      [23, 45, 15, 25, 46, 16],
+
+      // 31
+      [13, 145, 115, 3, 146, 116],
+      [2, 74, 46, 29, 75, 47],
+      [42, 54, 24, 1, 55, 25],
+      [23, 45, 15, 28, 46, 16],
+
+      // 32
+      [17, 145, 115],
+      [10, 74, 46, 23, 75, 47],
+      [10, 54, 24, 35, 55, 25],
+      [19, 45, 15, 35, 46, 16],
+
+      // 33
+      [17, 145, 115, 1, 146, 116],
+      [14, 74, 46, 21, 75, 47],
+      [29, 54, 24, 19, 55, 25],
+      [11, 45, 15, 46, 46, 16],
+
+      // 34
+      [13, 145, 115, 6, 146, 116],
+      [14, 74, 46, 23, 75, 47],
+      [44, 54, 24, 7, 55, 25],
+      [59, 46, 16, 1, 47, 17],
+
+      // 35
+      [12, 151, 121, 7, 152, 122],
+      [12, 75, 47, 26, 76, 48],
+      [39, 54, 24, 14, 55, 25],
+      [22, 45, 15, 41, 46, 16],
+
+      // 36
+      [6, 151, 121, 14, 152, 122],
+      [6, 75, 47, 34, 76, 48],
+      [46, 54, 24, 10, 55, 25],
+      [2, 45, 15, 64, 46, 16],
+
+      // 37
+      [17, 152, 122, 4, 153, 123],
+      [29, 74, 46, 14, 75, 47],
+      [49, 54, 24, 10, 55, 25],
+      [24, 45, 15, 46, 46, 16],
+
+      // 38
+      [4, 152, 122, 18, 153, 123],
+      [13, 74, 46, 32, 75, 47],
+      [48, 54, 24, 14, 55, 25],
+      [42, 45, 15, 32, 46, 16],
+
+      // 39
+      [20, 147, 117, 4, 148, 118],
+      [40, 75, 47, 7, 76, 48],
+      [43, 54, 24, 22, 55, 25],
+      [10, 45, 15, 67, 46, 16],
+
+      // 40
+      [19, 148, 118, 6, 149, 119],
+      [18, 75, 47, 31, 76, 48],
+      [34, 54, 24, 34, 55, 25],
+      [20, 45, 15, 61, 46, 16]
+    ];
+
+    var qrRSBlock = function(totalCount, dataCount) {
+      var _this = {};
+      _this.totalCount = totalCount;
+      _this.dataCount = dataCount;
+      return _this;
+    };
+
+    var _this = {};
+
+    var getRsBlockTable = function(typeNumber, errorCorrectionLevel) {
+
+      switch(errorCorrectionLevel) {
+      case QRErrorCorrectionLevel.L :
+        return RS_BLOCK_TABLE[(typeNumber - 1) * 4 + 0];
+      case QRErrorCorrectionLevel.M :
+        return RS_BLOCK_TABLE[(typeNumber - 1) * 4 + 1];
+      case QRErrorCorrectionLevel.Q :
+        return RS_BLOCK_TABLE[(typeNumber - 1) * 4 + 2];
+      case QRErrorCorrectionLevel.H :
+        return RS_BLOCK_TABLE[(typeNumber - 1) * 4 + 3];
+      default :
+        return undefined;
+      }
+    };
+
+    _this.getRSBlocks = function(typeNumber, errorCorrectionLevel) {
+
+      var rsBlock = getRsBlockTable(typeNumber, errorCorrectionLevel);
+
+      if (typeof rsBlock == 'undefined') {
+        throw 'bad rs block @ typeNumber:' + typeNumber +
+            '/errorCorrectionLevel:' + errorCorrectionLevel;
+      }
+
+      var length = rsBlock.length / 3;
+
+      var list = [];
+
+      for (var i = 0; i < length; i += 1) {
+
+        var count = rsBlock[i * 3 + 0];
+        var totalCount = rsBlock[i * 3 + 1];
+        var dataCount = rsBlock[i * 3 + 2];
+
+        for (var j = 0; j < count; j += 1) {
+          list.push(qrRSBlock(totalCount, dataCount) );
+        }
+      }
+
+      return list;
+    };
+
+    return _this;
+  }();
+
+  //---------------------------------------------------------------------
+  // qrBitBuffer
+  //---------------------------------------------------------------------
+
+  var qrBitBuffer = function() {
+
+    var _buffer = [];
+    var _length = 0;
+
+    var _this = {};
+
+    _this.getBuffer = function() {
+      return _buffer;
+    };
+
+    _this.getAt = function(index) {
+      var bufIndex = Math.floor(index / 8);
+      return ( (_buffer[bufIndex] >>> (7 - index % 8) ) & 1) == 1;
+    };
+
+    _this.put = function(num, length) {
+      for (var i = 0; i < length; i += 1) {
+        _this.putBit( ( (num >>> (length - i - 1) ) & 1) == 1);
+      }
+    };
+
+    _this.getLengthInBits = function() {
+      return _length;
+    };
+
+    _this.putBit = function(bit) {
+
+      var bufIndex = Math.floor(_length / 8);
+      if (_buffer.length <= bufIndex) {
+        _buffer.push(0);
+      }
+
+      if (bit) {
+        _buffer[bufIndex] |= (0x80 >>> (_length % 8) );
+      }
+
+      _length += 1;
+    };
+
+    return _this;
+  };
+
+  //---------------------------------------------------------------------
+  // qrNumber
+  //---------------------------------------------------------------------
+
+  var qrNumber = function(data) {
+
+    var _mode = QRMode.MODE_NUMBER;
+    var _data = data;
+
+    var _this = {};
+
+    _this.getMode = function() {
+      return _mode;
+    };
+
+    _this.getLength = function(buffer) {
+      return _data.length;
+    };
+
+    _this.write = function(buffer) {
+
+      var data = _data;
+
+      var i = 0;
+
+      while (i + 2 < data.length) {
+        buffer.put(strToNum(data.substring(i, i + 3) ), 10);
+        i += 3;
+      }
+
+      if (i < data.length) {
+        if (data.length - i == 1) {
+          buffer.put(strToNum(data.substring(i, i + 1) ), 4);
+        } else if (data.length - i == 2) {
+          buffer.put(strToNum(data.substring(i, i + 2) ), 7);
+        }
+      }
+    };
+
+    var strToNum = function(s) {
+      var num = 0;
+      for (var i = 0; i < s.length; i += 1) {
+        num = num * 10 + chatToNum(s.charAt(i) );
+      }
+      return num;
+    };
+
+    var chatToNum = function(c) {
+      if ('0' <= c && c <= '9') {
+        return c.charCodeAt(0) - '0'.charCodeAt(0);
+      }
+      throw 'illegal char :' + c;
+    };
+
+    return _this;
+  };
+
+  //---------------------------------------------------------------------
+  // qrAlphaNum
+  //---------------------------------------------------------------------
+
+  var qrAlphaNum = function(data) {
+
+    var _mode = QRMode.MODE_ALPHA_NUM;
+    var _data = data;
+
+    var _this = {};
+
+    _this.getMode = function() {
+      return _mode;
+    };
+
+    _this.getLength = function(buffer) {
+      return _data.length;
+    };
+
+    _this.write = function(buffer) {
+
+      var s = _data;
+
+      var i = 0;
+
+      while (i + 1 < s.length) {
+        buffer.put(
+          getCode(s.charAt(i) ) * 45 +
+          getCode(s.charAt(i + 1) ), 11);
+        i += 2;
+      }
+
+      if (i < s.length) {
+        buffer.put(getCode(s.charAt(i) ), 6);
+      }
+    };
+
+    var getCode = function(c) {
+
+      if ('0' <= c && c <= '9') {
+        return c.charCodeAt(0) - '0'.charCodeAt(0);
+      } else if ('A' <= c && c <= 'Z') {
+        return c.charCodeAt(0) - 'A'.charCodeAt(0) + 10;
+      } else {
+        switch (c) {
+        case ' ' : return 36;
+        case '$' : return 37;
+        case '%' : return 38;
+        case '*' : return 39;
+        case '+' : return 40;
+        case '-' : return 41;
+        case '.' : return 42;
+        case '/' : return 43;
+        case ':' : return 44;
+        default :
+          throw 'illegal char :' + c;
+        }
+      }
+    };
+
+    return _this;
+  };
+
+  //---------------------------------------------------------------------
+  // qr8BitByte
+  //---------------------------------------------------------------------
+
+  var qr8BitByte = function(data) {
+
+    var _mode = QRMode.MODE_8BIT_BYTE;
+    var _data = data;
+    var _bytes = qrcode.stringToBytes(data);
+
+    var _this = {};
+
+    _this.getMode = function() {
+      return _mode;
+    };
+
+    _this.getLength = function(buffer) {
+      return _bytes.length;
+    };
+
+    _this.write = function(buffer) {
+      for (var i = 0; i < _bytes.length; i += 1) {
+        buffer.put(_bytes[i], 8);
+      }
+    };
+
+    return _this;
+  };
+
+  //---------------------------------------------------------------------
+  // qrKanji
+  //---------------------------------------------------------------------
+
+  var qrKanji = function(data) {
+
+    var _mode = QRMode.MODE_KANJI;
+    var _data = data;
+
+    var stringToBytes = qrcode.stringToBytesFuncs['SJIS'];
+    if (!stringToBytes) {
+      throw 'sjis not supported.';
+    }
+    !function(c, code) {
+      // self test for sjis support.
+      var test = stringToBytes(c);
+      if (test.length != 2 || ( (test[0] << 8) | test[1]) != code) {
+        throw 'sjis not supported.';
+      }
+    }('\u53cb', 0x9746);
+
+    var _bytes = stringToBytes(data);
+
+    var _this = {};
+
+    _this.getMode = function() {
+      return _mode;
+    };
+
+    _this.getLength = function(buffer) {
+      return ~~(_bytes.length / 2);
+    };
+
+    _this.write = function(buffer) {
+
+      var data = _bytes;
+
+      var i = 0;
+
+      while (i + 1 < data.length) {
+
+        var c = ( (0xff & data[i]) << 8) | (0xff & data[i + 1]);
+
+        if (0x8140 <= c && c <= 0x9FFC) {
+          c -= 0x8140;
+        } else if (0xE040 <= c && c <= 0xEBBF) {
+          c -= 0xC140;
+        } else {
+          throw 'illegal char at ' + (i + 1) + '/' + c;
+        }
+
+        c = ( (c >>> 8) & 0xff) * 0xC0 + (c & 0xff);
+
+        buffer.put(c, 13);
+
+        i += 2;
+      }
+
+      if (i < data.length) {
+        throw 'illegal char at ' + (i + 1);
+      }
+    };
+
+    return _this;
+  };
+
+  //=====================================================================
+  // GIF Support etc.
+  //
+
+  //---------------------------------------------------------------------
+  // byteArrayOutputStream
+  //---------------------------------------------------------------------
+
+  var byteArrayOutputStream = function() {
+
+    var _bytes = [];
+
+    var _this = {};
+
+    _this.writeByte = function(b) {
+      _bytes.push(b & 0xff);
+    };
+
+    _this.writeShort = function(i) {
+      _this.writeByte(i);
+      _this.writeByte(i >>> 8);
+    };
+
+    _this.writeBytes = function(b, off, len) {
+      off = off || 0;
+      len = len || b.length;
+      for (var i = 0; i < len; i += 1) {
+        _this.writeByte(b[i + off]);
+      }
+    };
+
+    _this.writeString = function(s) {
+      for (var i = 0; i < s.length; i += 1) {
+        _this.writeByte(s.charCodeAt(i) );
+      }
+    };
+
+    _this.toByteArray = function() {
+      return _bytes;
+    };
+
+    _this.toString = function() {
+      var s = '';
+      s += '[';
+      for (var i = 0; i < _bytes.length; i += 1) {
+        if (i > 0) {
+          s += ',';
+        }
+        s += _bytes[i];
+      }
+      s += ']';
+      return s;
+    };
+
+    return _this;
+  };
+
+  //---------------------------------------------------------------------
+  // base64EncodeOutputStream
+  //---------------------------------------------------------------------
+
+  var base64EncodeOutputStream = function() {
+
+    var _buffer = 0;
+    var _buflen = 0;
+    var _length = 0;
+    var _base64 = '';
+
+    var _this = {};
+
+    var writeEncoded = function(b) {
+      _base64 += String.fromCharCode(encode(b & 0x3f) );
+    };
+
+    var encode = function(n) {
+      if (n < 0) {
+        // error.
+      } else if (n < 26) {
+        return 0x41 + n;
+      } else if (n < 52) {
+        return 0x61 + (n - 26);
+      } else if (n < 62) {
+        return 0x30 + (n - 52);
+      } else if (n == 62) {
+        return 0x2b;
+      } else if (n == 63) {
+        return 0x2f;
+      }
+      throw 'n:' + n;
+    };
+
+    _this.writeByte = function(n) {
+
+      _buffer = (_buffer << 8) | (n & 0xff);
+      _buflen += 8;
+      _length += 1;
+
+      while (_buflen >= 6) {
+        writeEncoded(_buffer >>> (_buflen - 6) );
+        _buflen -= 6;
+      }
+    };
+
+    _this.flush = function() {
+
+      if (_buflen > 0) {
+        writeEncoded(_buffer << (6 - _buflen) );
+        _buffer = 0;
+        _buflen = 0;
+      }
+
+      if (_length % 3 != 0) {
+        // padding
+        var padlen = 3 - _length % 3;
+        for (var i = 0; i < padlen; i += 1) {
+          _base64 += '=';
+        }
+      }
+    };
+
+    _this.toString = function() {
+      return _base64;
+    };
+
+    return _this;
+  };
+
+  //---------------------------------------------------------------------
+  // base64DecodeInputStream
+  //---------------------------------------------------------------------
+
+  var base64DecodeInputStream = function(str) {
+
+    var _str = str;
+    var _pos = 0;
+    var _buffer = 0;
+    var _buflen = 0;
+
+    var _this = {};
+
+    _this.read = function() {
+
+      while (_buflen < 8) {
+
+        if (_pos >= _str.length) {
+          if (_buflen == 0) {
+            return -1;
+          }
+          throw 'unexpected end of file./' + _buflen;
+        }
+
+        var c = _str.charAt(_pos);
+        _pos += 1;
+
+        if (c == '=') {
+          _buflen = 0;
+          return -1;
+        } else if (c.match(/^\s$/) ) {
+          // ignore if whitespace.
+          continue;
+        }
+
+        _buffer = (_buffer << 6) | decode(c.charCodeAt(0) );
+        _buflen += 6;
+      }
+
+      var n = (_buffer >>> (_buflen - 8) ) & 0xff;
+      _buflen -= 8;
+      return n;
+    };
+
+    var decode = function(c) {
+      if (0x41 <= c && c <= 0x5a) {
+        return c - 0x41;
+      } else if (0x61 <= c && c <= 0x7a) {
+        return c - 0x61 + 26;
+      } else if (0x30 <= c && c <= 0x39) {
+        return c - 0x30 + 52;
+      } else if (c == 0x2b) {
+        return 62;
+      } else if (c == 0x2f) {
+        return 63;
+      } else {
+        throw 'c:' + c;
+      }
+    };
+
+    return _this;
+  };
+
+  //---------------------------------------------------------------------
+  // gifImage (B/W)
+  //---------------------------------------------------------------------
+
+  var gifImage = function(width, height) {
+
+    var _width = width;
+    var _height = height;
+    var _data = new Array(width * height);
+
+    var _this = {};
+
+    _this.setPixel = function(x, y, pixel) {
+      _data[y * _width + x] = pixel;
+    };
+
+    _this.write = function(out) {
+
+      //---------------------------------
+      // GIF Signature
+
+      out.writeString('GIF87a');
+
+      //---------------------------------
+      // Screen Descriptor
+
+      out.writeShort(_width);
+      out.writeShort(_height);
+
+      out.writeByte(0x80); // 2bit
+      out.writeByte(0);
+      out.writeByte(0);
+
+      //---------------------------------
+      // Global Color Map
+
+      // black
+      out.writeByte(0x00);
+      out.writeByte(0x00);
+      out.writeByte(0x00);
+
+      // white
+      out.writeByte(0xff);
+      out.writeByte(0xff);
+      out.writeByte(0xff);
+
+      //---------------------------------
+      // Image Descriptor
+
+      out.writeString(',');
+      out.writeShort(0);
+      out.writeShort(0);
+      out.writeShort(_width);
+      out.writeShort(_height);
+      out.writeByte(0);
+
+      //---------------------------------
+      // Local Color Map
+
+      //---------------------------------
+      // Raster Data
+
+      var lzwMinCodeSize = 2;
+      var raster = getLZWRaster(lzwMinCodeSize);
+
+      out.writeByte(lzwMinCodeSize);
+
+      var offset = 0;
+
+      while (raster.length - offset > 255) {
+        out.writeByte(255);
+        out.writeBytes(raster, offset, 255);
+        offset += 255;
+      }
+
+      out.writeByte(raster.length - offset);
+      out.writeBytes(raster, offset, raster.length - offset);
+      out.writeByte(0x00);
+
+      //---------------------------------
+      // GIF Terminator
+      out.writeString(';');
+    };
+
+    var bitOutputStream = function(out) {
+
+      var _out = out;
+      var _bitLength = 0;
+      var _bitBuffer = 0;
+
+      var _this = {};
+
+      _this.write = function(data, length) {
+
+        if ( (data >>> length) != 0) {
+          throw 'length over';
+        }
+
+        while (_bitLength + length >= 8) {
+          _out.writeByte(0xff & ( (data << _bitLength) | _bitBuffer) );
+          length -= (8 - _bitLength);
+          data >>>= (8 - _bitLength);
+          _bitBuffer = 0;
+          _bitLength = 0;
+        }
+
+        _bitBuffer = (data << _bitLength) | _bitBuffer;
+        _bitLength = _bitLength + length;
+      };
+
+      _this.flush = function() {
+        if (_bitLength > 0) {
+          _out.writeByte(_bitBuffer);
+        }
+      };
+
+      return _this;
+    };
+
+    var getLZWRaster = function(lzwMinCodeSize) {
+
+      var clearCode = 1 << lzwMinCodeSize;
+      var endCode = (1 << lzwMinCodeSize) + 1;
+      var bitLength = lzwMinCodeSize + 1;
+
+      // Setup LZWTable
+      var table = lzwTable();
+
+      for (var i = 0; i < clearCode; i += 1) {
+        table.add(String.fromCharCode(i) );
+      }
+      table.add(String.fromCharCode(clearCode) );
+      table.add(String.fromCharCode(endCode) );
+
+      var byteOut = byteArrayOutputStream();
+      var bitOut = bitOutputStream(byteOut);
+
+      // clear code
+      bitOut.write(clearCode, bitLength);
+
+      var dataIndex = 0;
+
+      var s = String.fromCharCode(_data[dataIndex]);
+      dataIndex += 1;
+
+      while (dataIndex < _data.length) {
+
+        var c = String.fromCharCode(_data[dataIndex]);
+        dataIndex += 1;
+
+        if (table.contains(s + c) ) {
+
+          s = s + c;
+
+        } else {
+
+          bitOut.write(table.indexOf(s), bitLength);
+
+          if (table.size() < 0xfff) {
+
+            if (table.size() == (1 << bitLength) ) {
+              bitLength += 1;
+            }
+
+            table.add(s + c);
+          }
+
+          s = c;
+        }
+      }
+
+      bitOut.write(table.indexOf(s), bitLength);
+
+      // end code
+      bitOut.write(endCode, bitLength);
+
+      bitOut.flush();
+
+      return byteOut.toByteArray();
+    };
+
+    var lzwTable = function() {
+
+      var _map = {};
+      var _size = 0;
+
+      var _this = {};
+
+      _this.add = function(key) {
+        if (_this.contains(key) ) {
+          throw 'dup key:' + key;
+        }
+        _map[key] = _size;
+        _size += 1;
+      };
+
+      _this.size = function() {
+        return _size;
+      };
+
+      _this.indexOf = function(key) {
+        return _map[key];
+      };
+
+      _this.contains = function(key) {
+        return typeof _map[key] != 'undefined';
+      };
+
+      return _this;
+    };
+
+    return _this;
+  };
+
+  var createDataURL = function(width, height, getPixel) {
+    var gif = gifImage(width, height);
+    for (var y = 0; y < height; y += 1) {
+      for (var x = 0; x < width; x += 1) {
+        gif.setPixel(x, y, getPixel(x, y) );
+      }
+    }
+
+    var b = byteArrayOutputStream();
+    gif.write(b);
+
+    var base64 = base64EncodeOutputStream();
+    var bytes = b.toByteArray();
+    for (var i = 0; i < bytes.length; i += 1) {
+      base64.writeByte(bytes[i]);
+    }
+    base64.flush();
+
+    return 'data:image/gif;base64,' + base64;
+  };
+
+  //---------------------------------------------------------------------
+  // returns qrcode function.
+
+  return qrcode;
+}();
+
+// multibyte support
+!function() {
+
+  qrcode.stringToBytesFuncs['UTF-8'] = function(s) {
+    // http://stackoverflow.com/questions/18729405/how-to-convert-utf8-string-to-byte-array
+    function toUTF8Array(str) {
+      var utf8 = [];
+      for (var i=0; i < str.length; i++) {
+        var charcode = str.charCodeAt(i);
+        if (charcode < 0x80) utf8.push(charcode);
+        else if (charcode < 0x800) {
+          utf8.push(0xc0 | (charcode >> 6),
+              0x80 | (charcode & 0x3f));
+        }
+        else if (charcode < 0xd800 || charcode >= 0xe000) {
+          utf8.push(0xe0 | (charcode >> 12),
+              0x80 | ((charcode>>6) & 0x3f),
+              0x80 | (charcode & 0x3f));
+        }
+        // surrogate pair
+        else {
+          i++;
+          // UTF-16 encodes 0x10000-0x10FFFF by
+          // subtracting 0x10000 and splitting the
+          // 20 bits of 0x0-0xFFFFF into two halves
+          charcode = 0x10000 + (((charcode & 0x3ff)<<10)
+            | (str.charCodeAt(i) & 0x3ff));
+          utf8.push(0xf0 | (charcode >>18),
+              0x80 | ((charcode>>12) & 0x3f),
+              0x80 | ((charcode>>6) & 0x3f),
+              0x80 | (charcode & 0x3f));
+        }
+      }
+      return utf8;
+    }
+    return toUTF8Array(s);
+  };
+
+}();
+
+(function (factory) {
+  if (typeof define === 'function' && define.amd) {
+      define([], factory);
+  } else if (typeof exports === 'object') {
+      module.exports = factory();
+  }
+}(function () {
+    return qrcode;
+}));
+
+</script>
+<script>
+// ---------- Configuración para la clase ----------
+// databaseURL: dirección de Firebase Realtime Database (sin ella, el ranking es simulado).
+// gameURL: dirección pública del juego, usada para el QR.
+const CONFIG = { databaseURL: "https://morti-uno-default-rtdb.europe-west1.firebasedatabase.app", gameURL: null };
+
+// ---------- Banco de preguntas: 6 temas x 50 ----------
+// Formato: [pregunta, respuesta correcta, incorrecta 1, incorrecta 2, incorrecta 3, explicación].
+// Dentro de cada tema están ordenadas de menor a mayor dificultad: 1-17 básicas, 18-34 intermedias, 35-50 avanzadas.
+const LEVELS = [{"name":"Estructuras vegetales","qs":[["¿Qué estructura distingue a las células vegetales de las animales y les da forma y soporte?","Pared celular","Membrana plasmática","Centriolo","Lisosoma","La pared celular, rica en celulosa, resiste la presión de turgencia y da forma a la célula."],
+["¿Cuál es el principal polisacárido estructural de la pared celular vegetal?","Celulosa","Almidón","Quitina","Glucógeno","La celulosa forma microfibrillas de glucosa unidas por enlaces β-1,4, muy resistentes a la tracción."],
+["¿En qué orgánulo ocurre la fotosíntesis?","Cloroplasto","Mitocondria","Vacuola","Aparato de Golgi","El cloroplasto contiene los tilacoides (fase luminosa) y el estroma (ciclo de Calvin)."],
+["¿Qué tejido recubre y protege los órganos jóvenes de la planta?","Epidermis","Colénquima","Xilema","Felógeno","La epidermis es el tejido protector del cuerpo primario; el felógeno origina la peridermis en el crecimiento secundario."],
+["¿Qué tejido conduce agua y sales minerales desde la raíz hasta las hojas?","Xilema","Floema","Esclerénquima","Meristemo","El xilema conduce la savia bruta (agua y minerales) en sentido ascendente."],
+["¿Qué tejido transporta los azúcares producidos en la fotosíntesis?","Floema","Xilema","Epidermis","Colénquima","El floema distribuye la savia elaborada, rica en sacarosa, desde las fuentes hacia los sumideros."],
+["Los meristemos apicales son responsables principalmente del:","Crecimiento en longitud (crecimiento primario)","Crecimiento en grosor","Transporte de agua","Almacenamiento de almidón","Los meristemos apicales de tallo y raíz generan el cuerpo primario; el grosor depende de los meristemos laterales."],
+["¿Qué estructuras de la epidermis regulan el intercambio de gases en las hojas?","Estomas","Tricomas","Hidátodos","Células buliformes","Los estomas regulan la entrada de CO₂ y la salida de vapor de agua. Las lenticelas cumplen una función parecida en la peridermis."],
+["¿Cómo se llaman las células que rodean el ostiolo del estoma?","Células oclusivas (de guarda)","Células acompañantes","Tricoblastos","Células de paso","Los cambios de turgencia de las células oclusivas abren o cierran el ostiolo."],
+["¿Qué capa cerosa cubre la epidermis aérea y reduce la pérdida de agua?","Cutícula","Suberina","Lignina","Calosa","La cutícula, formada por cutina y ceras, es la principal barrera contra la transpiración no estomática."],
+["¿Qué tejido fundamental, de células vivas y pared delgada, cumple funciones de fotosíntesis y reserva?","Parénquima","Esclerénquima","Colénquima","Xilema","El parénquima es el tejido más versátil: fotosíntesis, reserva, cicatrización y regeneración."],
+["¿Qué tejido de sostén está formado por células generalmente muertas a la madurez y con paredes lignificadas?","Esclerénquima","Colénquima","Parénquima","Meristemo","El esclerénquima (fibras y esclereidas) da resistencia mecánica en órganos que ya terminaron de crecer."],
+["Las fibras y las esclereidas son tipos celulares de:","Esclerénquima","Colénquima","Parénquima","Epidermis","Las fibras son alargadas y las esclereidas de forma variable, como las células pétreas de la pera."],
+["¿Cómo se llama el parénquima de la hoja especializado en la fotosíntesis?","Mesófilo (clorénquima)","Aerénquima","Felema","Endodermis","El mesófilo suele diferenciarse en parénquima en empalizada y parénquima esponjoso."],
+["¿Qué parénquima con grandes espacios de aire es típico de plantas acuáticas o de suelos inundados?","Aerénquima","Clorénquima","Colénquima","Parénquima de reserva","El aerénquima facilita la difusión de O₂ hacia órganos sumergidos."],
+["Los pelos absorbentes de la raíz se originan en:","La epidermis de la raíz (rizodermis)","La endodermis","El periciclo","La cofia","Son prolongaciones de células epidérmicas (tricoblastos) que aumentan la superficie de absorción."],
+["¿Qué estructura protege el meristemo apical de la raíz mientras avanza en el suelo?","Cofia (caliptra)","Coleóptilo","Periciclo","Nudo","La cofia secreta mucílago, protege el meristemo y percibe la gravedad en sus células de la columela."],
+["¿Dónde se originan las raíces laterales?","En el periciclo","En la epidermis","En la endodermis","En la corteza externa","Las raíces laterales tienen origen endógeno: nacen del periciclo y atraviesan endodermis, corteza y epidermis."],
+["¿Qué diferencia a los elementos de vaso de las traqueidas?","Los elementos de vaso tienen placas de perforación; las traqueidas solo se comunican por punteaduras","Las traqueidas son células vivas y los vasos muertos","Los vasos carecen de lignina","Las traqueidas pertenecen al floema","Ambos son células muertas lignificadas del xilema, pero las placas de perforación hacen a los vasos más eficientes."],
+["En el floema de angiospermas, ¿qué célula mantiene el metabolismo del elemento criboso?","La célula acompañante","La fibra","La traqueida","La esclereida","La célula acompañante, conectada por numerosos plasmodesmos, aporta proteínas, ATP y participa en la carga del floema."],
+["Los elementos cribosos maduros carecen de:","Núcleo","Membrana plasmática","Pared celular","Retículo endoplasmático","Pierden núcleo, vacuola y ribosomas, pero conservan membrana plasmática, RE liso y algunos plastidios."],
+["¿Qué polisacárido se deposita rápidamente en las placas cribosas cuando el floema se daña?","Calosa","Celulosa","Pectina","Suberina","La calosa (β-1,3-glucano) sella los poros cribosos y evita la pérdida de savia."],
+["En el tallo primario de la mayoría de las monocotiledóneas, los haces vasculares:","Están dispersos en el parénquima fundamental","Forman un solo anillo","Forman un cilindro sólido sin médula","Están ausentes","La disposición dispersa (atactostela) contrasta con el anillo de haces (eustela) de las dicotiledóneas."],
+["El cambium vascular produce:","Xilema secundario hacia adentro y floema secundario hacia afuera","Floema hacia adentro y xilema hacia afuera","Solo corcho","Solo xilema secundario","El cambium es un meristemo lateral bifacial; el xilema secundario forma la madera."],
+["El felógeno (cambium suberoso) produce:","Súber (felema) hacia afuera y felodermis hacia adentro","Xilema y floema secundarios","Epidermis y cutícula","Médula y radios","Felógeno, súber y felodermis forman la peridermis, que reemplaza a la epidermis."],
+["¿Qué estructuras de la peridermis permiten el intercambio de gases?","Lenticelas","Estomas","Hidátodos","Plasmodesmos","Las lenticelas son zonas de células sueltas en la peridermis que permiten la aireación de tejidos internos."],
+["La lámina media que une células vegetales vecinas está compuesta principalmente de:","Pectinas","Celulosa","Lignina","Suberina","La lámina media es rica en pectatos de calcio; su degradación separa las células, como ocurre en el ablandamiento de frutos."],
+["La pared celular secundaria se deposita:","Entre la membrana plasmática y la pared primaria, cuando la célula deja de crecer","Por fuera de la lámina media","Solo en células meristemáticas","Antes que la pared primaria","La pared secundaria se forma hacia el interior y suele lignificarse, como en fibras y vasos."],
+["¿Qué polímero fenólico da rigidez e impermeabilidad a las paredes secundarias del xilema?","Lignina","Cutina","Calosa","Pectina","La lignina, derivada de alcoholes monolignoles, permite resistir la tensión del agua en el xilema."],
+["La anatomía Kranz, propia de muchas plantas C4, se caracteriza por:","Una vaina del haz con abundantes cloroplastos rodeada de mesófilo dispuesto en forma radial","La ausencia de estomas","Un mesófilo en empalizada doble","Hojas sin haces vasculares","Esta anatomía separa espacialmente la fijación inicial de CO₂ (mesófilo) y el ciclo de Calvin (vaina)."],
+["¿Qué función tienen las células buliformes de las hojas de gramíneas?","Permitir que la hoja se enrolle o pliegue en déficit hídrico","Secretar néctar","Almacenar almidón","Fijar nitrógeno","Al perder turgencia, estas células grandes de la epidermis adaxial hacen que la hoja se enrolle y transpire menos."],
+["¿Qué hacen los tricomas glandulares?","Secretan metabolitos secundarios como aceites esenciales y resinas","Absorben agua del suelo","Conducen azúcares","Producen nuevas raíces","Los tricomas glandulares, como los de la menta o el tomate, participan en la defensa contra herbívoros."],
+["¿Qué estructuras del margen foliar eliminan agua líquida durante la gutación?","Hidátodos","Estomas","Lenticelas","Nectarios","Los hidátodos liberan agua impulsada por la presión radical, sobre todo en noches húmedas."],
+["En la raíz de monocotiledóneas es común encontrar:","Médula central y xilema poliarco","Xilema diarco sin médula","Crecimiento secundario abundante","Ausencia de endodermis","Muchas raíces de monocotiledóneas tienen numerosos polos de xilema que rodean una médula parenquimática."],
+["Las microfibrillas de celulosa son sintetizadas por:","Complejos celulosa sintasa (rosetas) en la membrana plasmática","El aparato de Golgi","El retículo endoplasmático rugoso","Los cloroplastos","Las hemicelulosas y pectinas se sintetizan en el Golgi, pero la celulosa se polimeriza en la membrana plasmática."],
+["¿Qué guía la orientación con que se depositan las microfibrillas de celulosa?","Los microtúbulos corticales","Los filamentos de actina","La lámina nuclear","Los plasmodesmos","Las rosetas de celulosa sintasa se desplazan a lo largo de microtúbulos corticales, lo que define la dirección de expansión celular."],
+["¿Cuál es la principal hemicelulosa de las paredes primarias de dicotiledóneas?","Xiloglucano","Arabinoxilano","Amilopectina","Calosa","El xiloglucano se une a las microfibrillas de celulosa; en gramíneas predominan los arabinoxilanos."],
+["¿Qué proteínas aflojan la pared celular durante el crecimiento ácido?","Expansinas","Extensinas","Dehidrinas","Arabinogalactanos","Las expansinas rompen puentes de hidrógeno entre celulosa y hemicelulosas a pH ácido, permitiendo la expansión."],
+["Según la teoría del crecimiento ácido, la auxina promueve la elongación porque:","Activa la H⁺-ATPasa, acidifica el apoplasto y activa a las expansinas","Disuelve la lignina de la pared","Inhibe la síntesis de celulosa","Aumenta el pH de la pared","La acidificación de la pared activa las expansinas y la turgencia impulsa la expansión irreversible."],
+["Las células de transferencia se caracterizan por:","Invaginaciones de la pared que aumentan la superficie de membrana para el transporte","Paredes muy lignificadas","Ausencia de membrana plasmática","Carecer de plasmodesmos y de mitocondrias","Abundan donde hay intenso intercambio de solutos entre apoplasto y simplasto, como en la carga del floema o en semillas."],
+["En el meristemo apical caulinar, el tamaño de la población de células madre se regula por el circuito:","WUSCHEL–CLAVATA3","SHORT-ROOT–SCARECROW","PIN–AUX1","DELLA–GID1","WUSCHEL mantiene a las células madre e induce CLAVATA3, péptido que a su vez reprime a WUSCHEL."],
+["En la organización túnica-corpus del ápice caulinar, la túnica:","Está formada por capas externas que se dividen sobre todo en forma anticlinal","Es el núcleo interno que se divide en todos los planos","Corresponde a la cofia","Origina exclusivamente el xilema","La túnica mantiene capas superficiales ordenadas; el corpus, interno, se divide en varios planos y aumenta el volumen."],
+["El centro quiescente de la raíz:","Es un grupo de células de división lenta que mantiene a las células iniciales circundantes","Es la zona donde se forman los pelos absorbentes","Es la región de máxima elongación","Corresponde a la banda de Caspary","Funciona como organizador del nicho de células madre de la raíz y reserva para reponer iniciales dañadas."],
+["Los factores de transcripción SHORT-ROOT y SCARECROW son necesarios para:","La división asimétrica que separa endodermis y corteza","La formación de estomas","La lignificación del xilema","La apertura de lenticelas","SHORT-ROOT se mueve desde el estele a la capa adyacente y, junto con SCARECROW, especifica la endodermis."],
+["En el estado II de desarrollo de la endodermis:","Se deposita una lámina de suberina sobre toda la superficie de la pared","Solo existe la banda de Caspary","Las células mueren y se lignifican por completo","Se forman pelos absorbentes","La suberización completa limita aún más el paso transmembrana; en el estado III además se engrosan las paredes."],
+["Las células de paso de la endodermis:","Permanecen sin suberizar frente a los polos de protoxilema y facilitan la entrada de agua","Son células muertas lignificadas","Forman la cofia","Se ubican en la epidermis del tallo","Conservan solo la banda de Caspary, lo que permite el paso de agua y solutos hacia el xilema."],
+["La exodermis de muchas raíces (maíz, cebolla) es:","Una capa subepidérmica con banda de Caspary y suberina","La capa más interna de la corteza","Un tipo de floema","Un meristemo lateral","Actúa como una segunda barrera apoplástica, más externa que la endodermis."],
+["En angiospermas leñosas, el leño de reacción (de tensión) se forma:","En el lado superior de ramas inclinadas, con fibras gelatinosas ricas en celulosa","En el lado inferior, con traqueidas muy lignificadas","Solo en raíces","Solo en el duramen","En coníferas, en cambio, se forma leño de compresión en el lado inferior."],
+["Las tílides (tilosis) son:","Proliferaciones de células parenquimáticas hacia el lumen de los vasos que los obstruyen","Engrosamientos de la cutícula","Poros de la peridermis","Granos de almidón del xilema","Bloquean vasos no funcionales o infectados y son comunes en el duramen."],
+["En un anillo de crecimiento, el leño tardío se distingue del temprano porque tiene:","Células más pequeñas y de paredes más gruesas","Vasos más anchos y paredes delgadas","Más parénquima y menos fibras siempre","Ausencia total de lignina","El cambio brusco entre leño tardío y el temprano del año siguiente marca el límite del anillo."]]},
+{"name":"Transporte entre células y tejidos","qs":[["¿Cómo se llama el movimiento de agua a través de una membrana semipermeable?","Ósmosis","Transpiración","Gutación","Imbibición","El agua difunde a través de la membrana desde donde su potencial hídrico es mayor hacia donde es menor."],
+["¿Cómo se llama la pérdida de agua en forma de vapor desde las partes aéreas de la planta?","Transpiración","Gutación","Exudación","Plasmólisis","La transpiración genera la tensión que tira del agua por el xilema."],
+["¿Por dónde sale la mayor parte del agua transpirada por una hoja?","Por los estomas","Por la cutícula","Por los hidátodos","Por las lenticelas","Más del 90 % de la transpiración foliar ocurre a través de los estomas abiertos."],
+["El movimiento de agua por las paredes celulares y los espacios intercelulares, sin cruzar membranas, se llama vía:","Apoplástica","Simplástica","Transmembrana","Floemática","El apoplasto es el continuo de paredes y espacios extracelulares; se interrumpe en la endodermis por la banda de Caspary."],
+["La vía simplástica es el movimiento de agua y solutos:","A través de los citoplasmas conectados por plasmodesmos","Por las paredes celulares","Solo por el xilema","Por los espacios aéreos","El simplasto es el continuo de citoplasmas unidos por plasmodesmos."],
+["Si una célula vegetal se coloca en una solución hipertónica:","Pierde agua y puede plasmolizarse","Gana agua y estalla","No cambia de volumen","Aumenta su turgencia","El agua sale hacia el medio de menor potencial hídrico y el protoplasto se separa de la pared."],
+["Una célula vegetal colocada en agua pura:","Se vuelve turgente sin estallar gracias a la pared","Se plasmoliza","Estalla como un glóbulo rojo","Pierde todos sus solutos","La pared resiste la presión y la célula alcanza el equilibrio cuando su potencial hídrico llega a cero."],
+["El agua se mueve espontáneamente desde zonas de potencial hídrico:","Mayor (menos negativo) hacia menor (más negativo)","Menor hacia mayor","Igual hacia igual","Siempre desde las hojas hacia las raíces","El potencial hídrico expresa la energía libre del agua: el agua fluye hacia donde esta es menor."],
+["¿Cuál es el potencial hídrico del agua pura a presión atmosférica?","0 MPa","−1 MPa","+1 MPa","−0,1 MPa","Por convención, el agua pura en condiciones estándar tiene potencial hídrico cero."],
+["¿Cuáles son los principales componentes del potencial hídrico de una célula vegetal?","Potencial osmótico y potencial de presión","Potencial eléctrico y térmico","Solo el potencial gravitacional","Potencial de membrana y pH","Ψw = Ψs + Ψp (y Ψg, relevante en árboles altos)."],
+["Al agregar solutos al agua, su potencial osmótico:","Se vuelve más negativo","Se vuelve positivo","No cambia","Se iguala a la presión de turgencia","Los solutos reducen la energía libre del agua."],
+["¿Cuál es el principal azúcar transportado por el floema en la mayoría de las plantas?","Sacarosa","Glucosa","Almidón","Fructosa","La sacarosa es un azúcar no reductor, estable y muy soluble, ideal para el transporte a larga distancia."],
+["En el transporte por floema, ¿cuál es un sumidero típico?","Un fruto en desarrollo","Una hoja madura iluminada","Un estoma","Un vaso del xilema","Los sumideros importan azúcares: frutos, raíces, meristemos y hojas jóvenes."],
+["¿Qué teoría explica el ascenso de la savia bruta en plantas altas?","Cohesión-tensión","Flujo por presión de Münch","Transporte activo de agua","Capilaridad exclusivamente","La transpiración genera tensión y la cohesión del agua transmite ese tirón hasta las raíces."],
+["La cohesión entre moléculas de agua se debe a:","Puentes de hidrógeno","Enlaces covalentes entre moléculas","Fuerzas iónicas con el calcio","La presencia de lignina","Los puentes de hidrógeno dan al agua una gran resistencia a la tensión."],
+["La gutación es causada principalmente por:","La presión radical","La transpiración intensa","La apertura de lenticelas","El flujo floemático","De noche, la acumulación de iones en el xilema radical atrae agua y genera presión positiva."],
+["¿Qué proteínas forman canales que facilitan el paso de agua a través de membranas?","Acuaporinas","Expansinas","Fitocromos","Aquagliceroporinas de pared","Las acuaporinas (PIP en membrana plasmática, TIP en tonoplasto) aumentan la permeabilidad al agua."],
+["Si una célula tiene Ψp = +0,4 MPa y Ψs = −0,9 MPa, su potencial hídrico es:","−0,5 MPa","−1,3 MPa","+0,5 MPa","−0,4 MPa","Ψw = Ψs + Ψp = −0,9 + 0,4 = −0,5 MPa."],
+["La célula A tiene Ψw = −0,3 MPa y la célula vecina B tiene Ψw = −0,7 MPa. El agua se moverá:","De A hacia B","De B hacia A","No se moverá","En ambos sentidos por igual","El agua va hacia el potencial más negativo, en este caso B."],
+["Según la ecuación de van 't Hoff, el potencial osmótico depende de:","La concentración de solutos, la constante de los gases y la temperatura absoluta","Solo de la presión de turgencia","De la gravedad","Del volumen de la vacuola únicamente","Ψs = −c·i·R·T: más solutos o más temperatura dan valores más negativos."],
+["¿Qué bomba genera la fuerza protón-motriz en la membrana plasmática vegetal?","La H⁺-ATPasa tipo P","La V-ATPasa","La Na⁺/K⁺-ATPasa","La ATP sintasa del cloroplasto","Bombea H⁺ al apoplasto y genera un gradiente de pH y un potencial de membrana negativo."],
+["En la carga apoplástica del floema, la sacarosa entra al complejo elemento criboso-célula acompañante mediante:","Un simporte sacarosa-H⁺ (transportadores SUC/SUT)","Difusión simple","Plasmodesmos únicamente","Una ATPasa de sacarosa","Es transporte activo secundario que aprovecha el gradiente de protones."],
+["¿Qué función tienen los transportadores SWEET en la carga del floema?","Liberan sacarosa desde el parénquima del floema hacia el apoplasto","Bombean protones","Sintetizan sacarosa","Degradan almidón","Los SWEET son facilitadores de eflujo; luego los SUT recargan la sacarosa en el complejo criboso."],
+["En la carga simplástica por trampa de polímeros:","La sacarosa se convierte en rafinosa y estaquiosa en células intermediarias, que no pueden retroceder","La sacarosa se bombea con ATP al apoplasto","El almidón viaja por el floema","Las acuaporinas cargan azúcares","Los oligosacáridos más grandes pasan al elemento criboso pero no regresan al mesófilo."],
+["Los canales de K⁺ de entrada (como AKT1) permiten absorber K⁺ porque:","El potencial de membrana muy negativo impulsa su entrada a favor del gradiente electroquímico","Consumen ATP directamente","Transportan K⁺ junto con sacarosa","Funcionan solo en el tonoplasto","Con potenciales de −120 a −200 mV, el K⁺ puede entrar pasivamente aun a concentraciones externas bajas."],
+["Un transporte activo secundario:","Usa el gradiente de H⁺ creado por una bomba para mover otro soluto","Hidroliza ATP en el mismo transportador","Es una difusión facilitada sin gasto energético","Solo ocurre en el xilema","Simportes y antiportes acoplan el movimiento del soluto al flujo de protones."],
+["En la tolerancia a la salinidad, el antiportador SOS1 de la membrana plasmática:","Expulsa Na⁺ de la célula intercambiándolo por H⁺","Introduce Na⁺ en la vacuola","Bombea K⁺ hacia afuera","Transporta sacarosa","La compartimentación vacuolar de Na⁺ la realizan los antiportadores NHX del tonoplasto."],
+["¿Qué bombas acidifican la vacuola vegetal?","La V-ATPasa y la V-PPasa (pirofosfatasa)","La H⁺-ATPasa tipo P","La Ca²⁺-ATPasa del RE","La ATP sintasa mitocondrial","Ambas bombean H⁺ al lumen vacuolar y energizan el transporte a través del tonoplasto."],
+["La cavitación en el xilema es:","La formación de burbujas de gas que interrumpen la columna de agua bajo tensión extrema","La disolución de la lignina","La obstrucción por calosa","La entrada de agua por presión radical","La embolia resultante deja al conducto sin función hidráulica."],
+["¿Qué estructura limita que una embolia se propague de un conducto del xilema a otro?","La membrana de punteadura","La placa cribosa","El plasmodesmo","La banda de Caspary","Los poros diminutos de la membrana de punteadura retienen el aire por tensión superficial."],
+["La apertura estomática ocurre cuando:","Entran K⁺ y Cl⁻ o se forma malato en las células oclusivas, baja su Ψw, entra agua y aumenta la turgencia","Las células oclusivas pierden agua","Se acumula ABA en las células oclusivas","Se deposita calosa en el ostiolo","La turgencia y la orientación radial de las microfibrillas curvan las células oclusivas y abren el poro."],
+["La luz azul estimula la apertura estomática a través de:","Fototropinas que activan la H⁺-ATPasa de las células oclusivas","El fitocromo B","La síntesis de ABA","La clorofila del mesófilo únicamente","La hiperpolarización resultante favorece la entrada de K⁺."],
+["¿Por qué la deficiencia de calcio aparece primero en hojas jóvenes y frutos (por ejemplo, podredumbre apical del tomate)?","Porque el calcio se mueve casi solo por el xilema y es poco móvil en el floema","Porque el calcio es muy móvil en el floema","Porque los frutos transpiran mucho","Porque las hojas viejas absorben menos calcio","Los órganos que transpiran poco reciben poco calcio y no pueden obtenerlo por redistribución floemática."],
+["La tasa de transpiración aumenta principalmente cuando:","Aumenta el déficit de presión de vapor entre la hoja y el aire con los estomas abiertos","Aumenta la humedad relativa del aire","Se cierran los estomas","Disminuye la temperatura de la hoja","La transpiración es proporcional a la diferencia de concentración de vapor y a la conductancia estomática y de capa límite."],
+["El desmotúbulo que atraviesa los plasmodesmos deriva de:","El retículo endoplasmático","El aparato de Golgi","Los microtúbulos","La membrana del cloroplasto","El RE comprimido conecta células vecinas; el transporte ocurre sobre todo por el manguito citoplasmático que lo rodea."],
+["El límite de exclusión por tamaño de los plasmodesmos se regula principalmente por:","El depósito y degradación de calosa en el cuello del plasmodesmo","La lignificación","La síntesis de celulosa","La apertura de estomas","Más calosa estrecha el canal; las β-1,3-glucanasas lo reabren."],
+["Las proteínas de movimiento de los virus vegetales:","Aumentan el límite de exclusión de los plasmodesmos para que el virus pase de célula a célula","Bloquean los plasmodesmos","Transportan el virus por el xilema","Activan la banda de Caspary","Así el genoma viral avanza por el simplasto hasta llegar al floema."],
+["Según el modelo de Münch, la presión de turgencia en los elementos cribosos debe ser:","Mayor en la fuente que en el sumidero","Mayor en el sumidero que en la fuente","Igual en toda la planta","Negativa en la fuente","Esa diferencia de presión es la fuerza impulsora del flujo masivo."],
+["En una semilla en desarrollo, la descarga del floema hacia el embrión es apoplástica porque:","No hay continuidad simplástica entre los tejidos maternos y el embrión","El embrión carece de membranas","El floema no llega a la semilla","La sacarosa no puede atravesar plasmodesmos","Los azúcares salen al apoplasto de la cubierta seminal y luego son absorbidos por el embrión."],
+["La invertasa de pared celular en un sumidero:","Hidroliza la sacarosa en glucosa y fructosa en el apoplasto, manteniendo el gradiente de descarga","Sintetiza almidón en el cloroplasto","Carga sacarosa en la fuente","Degrada celulosa","Al consumir sacarosa apoplástica, mantiene la fuerza del sumidero."],
+["La fuerza de un sumidero se define como:","El producto de su tamaño por su actividad","Solo su contenido de almidón","Su distancia a la fuente","La presión radical","Un sumidero grande y metabólicamente activo atrae más asimilados."],
+["¿Qué señal sistémica de floración viaja por el floema desde la hoja hasta el ápice?","La proteína FT (florígeno)","El ácido abscísico","La auxina","La calosa","FT se produce en hojas en el fotoperiodo inductivo y en el ápice interactúa con FD."],
+["Según la ley de Hagen-Poiseuille, si se duplica el radio de un vaso, su conductancia hidráulica aumenta aproximadamente:","16 veces","2 veces","4 veces","8 veces","La conductancia es proporcional a la cuarta potencia del radio (2⁴ = 16)."],
+["¿Qué compromiso presentan los vasos del xilema muy anchos?","Conducen más agua, pero son más vulnerables a la embolia, por ejemplo por congelamiento","Conducen menos agua pero son más seguros","No tienen ninguna desventaja","Impiden la transpiración","Las burbujas formadas al descongelar son mayores en vasos anchos y se expanden con más facilidad."],
+["La cámara de presión de Scholander se usa para medir:","El potencial hídrico (tensión del xilema) de hojas o tallos","La tasa de fotosíntesis","La concentración de sacarosa del floema","La conductancia estomática","La presión necesaria para que la savia aflore en el corte equivale a la tensión del xilema."],
+["En condiciones salinas, los transportadores HKT1 de la raíz:","Retiran Na⁺ de la savia del xilema y limitan su llegada a las hojas","Cargan Na⁺ en el floema hacia los frutos","Bombean K⁺ fuera de la raíz","Sintetizan prolina","Es un mecanismo clave de exclusión de Na⁺ de la parte aérea."],
+["En el cierre estomático inducido por ABA, la quinasa OST1 (SnRK2.6) activa a:","El canal aniónico SLAC1, que despolariza la membrana","La H⁺-ATPasa","Los canales de K⁺ de entrada","Las acuaporinas del tonoplasto","La salida de aniones despolariza y abre canales de salida de K⁺: la célula pierde solutos y turgencia."],
+["¿Qué indica un coeficiente de reflexión (σ) igual a 1 para un soluto?","Que la membrana es impermeable a él y su efecto osmótico es completo","Que el soluto atraviesa libremente la membrana","Que no genera presión osmótica","Que el soluto es el agua","Con σ = 1 el soluto ejerce todo su potencial osmótico; con σ = 0 no ejerce ninguno."],
+["La liberación de K⁺ desde las células del estele hacia los vasos del xilema de la raíz está mediada por:","Canales de salida como SKOR","El simporte sacarosa-H⁺","La V-ATPasa","Las proteínas PIN","SKOR se activa con la despolarización y descarga K⁺ en la savia del xilema."],
+["¿Cómo pueden algunas especies reparar vasos del xilema embolizados?","Mediante presión radical nocturna o liberando solutos al vaso desde el parénquima para rellenarlo","Fabricando nuevos vasos en minutos","Lignificando el vaso","Mediante la transpiración intensa","El rellenado requiere que la tensión sea baja o que se generen gradientes osmóticos locales."]]},
+{"name":"Manejo de frutas en postcosecha","qs":[["¿Qué abarca la etapa de postcosecha de una fruta?","El período desde la cosecha hasta su consumo","Solo el transporte al mercado","El desarrollo del fruto en la planta","La polinización de la flor","Incluye cosecha, acondicionamiento, almacenamiento, transporte y comercialización."],
+["¿Qué proceso metabólico continúa después de la cosecha y consume las reservas del fruto?","La respiración","La fotosíntesis","La fijación de nitrógeno","La transpiración nocturna","Al no recibir más asimilados de la planta, el fruto consume sus azúcares y ácidos al respirar."],
+["¿Cuál es el factor ambiental más importante para prolongar la vida postcosecha?","La temperatura","La luz","El viento","El tipo de envase","Bajar la temperatura reduce la respiración, la producción de etileno y el crecimiento de patógenos."],
+["Un fruto climatérico es aquel que:","Puede madurar después de cosechado, con un aumento de la respiración y del etileno","Solo madura unido a la planta","No produce etileno","No respira tras la cosecha","Ejemplos: banana, tomate, manzana, aguacate y mango."],
+["¿Cuál de estos frutos es NO climatérico?","Fresa","Banana","Tomate","Manzana","Los no climatéricos (fresa, uva, cítricos, cereza) deben cosecharse ya maduros porque no mejoran después."],
+["¿Qué hormona gaseosa coordina la maduración de los frutos?","Etileno","Auxina","Giberelina","Citoquinina","El etileno regula ablandamiento, cambio de color, aroma y respiración."],
+["La pérdida de agua después de la cosecha provoca principalmente:","Marchitez, arrugamiento y pérdida de peso","Aumento de azúcares","Mayor firmeza","Cambio de sabor a ácido","Pérdidas de agua del 5 al 10 % ya pueden hacer que un producto no sea comercializable."],
+["¿Qué humedad relativa se recomienda para almacenar la mayoría de las frutas frescas?","85 a 95 %","20 a 30 %","40 a 50 %","100 % con agua condensada","Una humedad alta reduce la deshidratación, pero sin condensación que favorezca hongos."],
+["¿Qué es el preenfriamiento?","La eliminación rápida del calor de campo tras la cosecha","El congelamiento del fruto","El almacenamiento a temperatura ambiente","La aplicación de etileno","Se realiza con aire forzado, agua fría (hidroenfriamiento) o vacío, antes del almacenamiento."],
+["¿Qué índice de madurez se mide con un refractómetro?","Los sólidos solubles totales (°Brix)","La firmeza","El color de la cáscara","La producción de etileno","Los °Brix estiman sobre todo el contenido de azúcares del jugo."],
+["¿Con qué instrumento se mide la firmeza de la pulpa?","Penetrómetro","Refractómetro","Colorímetro","Termómetro","El penetrómetro mide la fuerza necesaria para que un émbolo penetre la pulpa."],
+["El ablandamiento del fruto durante la maduración se debe a enzimas como:","Poligalacturonasa y pectinmetilesterasa","Rubisco y PEP carboxilasa","Amilasas exclusivamente","Nitrogenasa","Estas enzimas modifican las pectinas de la pared y la lámina media."],
+["El paso de color verde a rojo o amarillo al madurar se debe a:","La degradación de clorofila y la síntesis de carotenoides o antocianinas","La síntesis de clorofila","La acumulación de almidón","La pérdida de agua","El cloroplasto se transforma en cromoplasto en muchos frutos."],
+["¿Por qué conviene cosechar en las horas más frescas del día?","Porque el fruto acumula menos calor de campo","Porque tiene más fotosíntesis","Porque pesa menos","Porque se evita la luz azul","Menos calor de campo significa menos respiración y menor costo de enfriamiento."],
+["Los golpes y heridas durante la cosecha:","Favorecen la entrada de patógenos y aumentan la respiración y el etileno","Mejoran la conservación","No afectan la calidad","Reducen la pérdida de agua","El daño mecánico es una de las principales causas de pérdidas postcosecha."],
+["¿Qué es la cadena de frío?","Mantener la temperatura baja sin interrupciones desde la cosecha hasta el consumo","Congelar y descongelar varias veces","Enfriar solo en el mercado","Usar hielo seco en el campo","Cada interrupción acelera el deterioro y favorece la condensación."],
+["El color morado oscuro de bayas como el mortiño se debe principalmente a:","Antocianinas","Clorofila","Licopeno","Betalaínas","Las antocianinas son flavonoides de la vacuola con propiedades antioxidantes."],
+["¿Qué frutos suelen sufrir daño por frío a temperaturas bajas pero no congelantes?","Frutos tropicales y subtropicales como banana, mango y aguacate","Manzanas y peras de climas templados","Uvas","Cerezas","Muchos frutos tropicales se dañan por debajo de 10 a 13 °C."],
+["¿Cuál es un síntoma típico del daño por frío?","Picado de la piel, pardeamiento y maduración anormal","Mayor dulzor","Crecimiento de raíces","Brotación de yemas","Los síntomas suelen aparecer al sacar el fruto a temperatura ambiente."],
+["El Q₁₀ de la respiración de muchos frutos está entre 2 y 3. Esto significa que:","Por cada 10 °C de aumento, la respiración se duplica o triplica","La respiración baja a la mitad al subir 10 °C","La respiración es constante","El fruto solo respira a 10 °C","Por eso unos pocos grados de diferencia cambian mucho la vida útil."],
+["Un cociente respiratorio (CO₂ liberado/O₂ consumido) muy superior a 1 en fruta almacenada suele indicar:","Fermentación por falta de O₂","Respiración de lípidos","Fotosíntesis activa","Fruta muy sana","En fermentación se libera CO₂ sin consumo de O₂, lo que eleva el cociente."],
+["En el envasado en atmósfera modificada:","La propia respiración del producto y la permeabilidad del film generan bajo O₂ y alto CO₂","Se inyecta etileno","Se eliminan todos los gases","Se aumenta el O₂ al 50 %","El equilibrio depende de la tasa respiratoria, la temperatura y el film elegido."],
+["¿Cuál es la secuencia de biosíntesis del etileno?","Metionina → SAM → ACC → etileno","Triptófano → AIA → etileno","Mevalonato → GA → etileno","Carotenoide → ABA → etileno","Las enzimas clave son la ACC sintasa y la ACC oxidasa."],
+["En frutos climatéricos, el sistema 2 de producción de etileno se caracteriza por ser:","Autocatalítico: el etileno estimula su propia síntesis","Inhibido por el etileno","Exclusivo de hojas","Independiente de la ACC sintasa","El sistema 1 (basal, autoinhibido) opera en tejidos vegetativos y frutos inmaduros."],
+["¿Cómo se puede eliminar el etileno de una cámara de almacenamiento?","Con permanganato de potasio, catalizadores u ozono, y ventilación","Agregando más fruta madura","Subiendo la temperatura","Con luz ultravioleta A","Bajar el etileno ambiental retrasa la maduración de productos sensibles."],
+["El desverdizado de cítricos con etileno:","Degrada la clorofila de la cáscara sin madurar la pulpa","Aumenta el azúcar de la pulpa","Hace climatérico al fruto","Elimina las semillas","Se usa cuando la pulpa ya está madura pero la cáscara sigue verde por el clima cálido."],
+["El aguacate no madura mientras está unido al árbol porque:","Un factor del árbol inhibe la maduración hasta la cosecha","No produce etileno nunca","Es no climatérico","Le falta agua","Por eso puede dejarse en el árbol como forma de almacenamiento."],
+["El pardeamiento enzimático de frutas cortadas se debe a:","La polifenol oxidasa, que oxida fenoles a quinonas que forman pigmentos pardos","La clorofilasa","La síntesis de antocianinas","La reacción de Maillard exclusivamente","Se controla con ácido ascórbico, acidulantes, frío o atmósferas con poco O₂."],
+["Los recubrimientos comestibles (ceras, quitosano) sirven para:","Reducir la pérdida de agua y el intercambio de gases","Aumentar la respiración","Acelerar la maduración","Eliminar las semillas","Crean una atmósfera modificada en la superficie del fruto."],
+["El tratamiento hidrotérmico en mango se usa para:","Controlar la mosca de la fruta y la antracnosis","Aumentar el color verde","Acelerar el ablandamiento","Quitar la cáscara","La inmersión en agua caliente es un tratamiento cuarentenario reconocido."],
+["¿Qué hongo causa el moho gris, una pudrición importante en bayas como fresa, uva y arándano?","Botrytis cinerea","Penicillium digitatum","Fusarium oxysporum","Rhizobium leguminosarum","Botrytis crece incluso a bajas temperaturas y se propaga entre frutos en contacto."],
+["La escaldadura superficial de las manzanas se asocia a la oxidación de:","α-farneseno","Clorofila","Celulosa","Sacarosa","Se controla con 1-MCP o con difenilamina (DPA), según la normativa de cada país."],
+["Durante el almacenamiento a temperatura alta, el contenido de vitamina C:","Disminuye más rápido","Aumenta","No cambia","Se transforma en almidón","El ácido ascórbico se oxida con facilidad; el frío y la humedad alta lo conservan."],
+["¿Cuál de estos productos tiene mayor tasa respiratoria?","Espárrago","Papa","Cebolla","Nuez","Los órganos inmaduros en crecimiento respiran mucho; los órganos de reserva latentes, poco."],
+["Los receptores de etileno (como ETR1) actúan como reguladores negativos. Esto significa que:","Sin etileno activan a CTR1 y reprimen la respuesta; el etileno los inactiva y la libera","El etileno los activa para reprimir la maduración","Funcionan solo en raíces","Degradan el etileno","Por eso los mutantes sin varios receptores muestran respuesta constitutiva al etileno."],
+["El mutante Never-ripe (Nr) de tomate no madura normalmente porque:","Tiene un receptor de etileno que no responde a la hormona","No produce ACC","Carece de clorofila","Tiene exceso de etileno","Nr es una mutación dominante en el receptor ETR3 (NR)."],
+["El mutante rin (ripening-inhibitor) de tomate afecta a:","Un factor de transcripción MADS-box que controla la maduración","La biosíntesis de clorofila","Un receptor de luz","La invertasa de pared","Los híbridos heterocigotos rin se usan para obtener tomates de larga vida."],
+["El tomate Flavr Savr (poligalacturonasa en antisentido) demostró que:","Reducir la poligalacturonasa casi no evitaba el ablandamiento, así que intervienen otras enzimas","La poligalacturonasa es la única causa del ablandamiento","El etileno no participa en la maduración","El tomate es no climatérico","Hoy se reconoce el papel de la pectato liasa, las expansinas y la pérdida de turgencia."],
+["En fresa, el silenciamiento de la pectato liasa:","Reduce notablemente el ablandamiento del fruto","Acelera la maduración","Elimina el color rojo","Aumenta la producción de etileno","La fresa es no climatérica y su ablandamiento depende mucho de la degradación de pectinas."],
+["Si el O₂ de una atmósfera controlada baja demasiado, se acumulan:","Acetaldehído y etanol, que generan malos sabores","Más azúcares","Antocianinas","Clorofila","La respiración anaeróbica produce compuestos fermentativos indeseables."],
+["En atmósfera controlada, el límite inferior de O₂ (LOL) es:","La concentración mínima de O₂ por debajo de la cual se induce la fermentación","La concentración máxima de CO₂ tolerada","El punto de congelamiento del fruto","La humedad mínima de la cámara","Trabajar cerca del LOL minimiza la respiración sin causar daño."],
+["La atmósfera controlada dinámica ajusta el O₂ según:","La respuesta del fruto, por ejemplo la fluorescencia de clorofila o el cociente respiratorio","Un calendario fijo","El color de la caja","La temperatura exterior","Permite trabajar con O₂ muy bajo detectando a tiempo el inicio de la fermentación."],
+["¿Por qué el 1-MCP tiene poco efecto en muchos frutos no climatéricos?","Porque su maduración depende poco del etileno","Porque no tienen membranas","Porque producen demasiado etileno","Porque el 1-MCP no atraviesa la cáscara","Bloquear los receptores de etileno sirve sobre todo donde el etileno controla la maduración."],
+["La tasa de pérdida de agua de un producto almacenado depende principalmente de:","El déficit de presión de vapor entre el producto y el aire","El color del producto","La cantidad de etileno","La concentración de CO₂","A igual temperatura, un aire más seco aumenta la diferencia de presión de vapor."],
+["¿Por qué las bayas pequeñas pierden agua más rápido que frutos grandes?","Porque tienen una mayor relación superficie/volumen","Porque no tienen cutícula","Porque respiran sin oxígeno","Porque tienen más semillas","Más superficie por unidad de volumen implica más pérdida relativa de agua."],
+["En bayas como el mortiño o el arándano, la pérdida de la pruina por manipulación:","Disminuye la calidad visual y puede aumentar la deshidratación","Mejora el sabor","Detiene la respiración","Hace al fruto climatérico","La pruina es una capa de ceras epicuticulares que da el tono azulado y protege el fruto."],
+["La aplicación de dosis bajas de luz UV-C a frutos (hormesis) puede:","Inducir defensas como fitoalexinas y retrasar las pudriciones","Esterilizar todo el fruto en profundidad","Aumentar la producción de clorofila","Acelerar el ablandamiento siempre","Dosis altas, en cambio, dañan los tejidos."],
+["Uno de los mecanismos propuestos del daño por frío es:","La transición de fase de los lípidos de membrana a un estado gel menos funcional","La formación de cristales de hielo","El exceso de fotosíntesis","La acumulación de etileno exclusivamente","Membranas con más ácidos grasos saturados son más sensibles al frío."],
+["¿Qué estrategia reduce el daño por frío en frutos sensibles?","El acondicionamiento térmico o el calentamiento intermitente","El almacenamiento a 0 °C sin interrupciones","El aumento de etileno","La eliminación de la cutícula","Estos tratamientos inducen tolerancia, por ejemplo con proteínas de choque térmico y cambios en membranas."],
+["El uso de ozono en cámaras de almacenamiento:","Desinfecta y oxida el etileno, pero en exceso daña los tejidos","No tiene ningún efecto","Aumenta la respiración del fruto","Sustituye a la cadena de frío","Debe dosificarse con cuidado por su toxicidad para el producto y las personas."]]},
+{"name":"Germinación de semillas","qs":[["¿Qué evento marca el final de la germinación en sentido estricto?","La emergencia de la radícula a través de las cubiertas","La aparición de la primera hoja verdadera","La floración","La caída de los cotiledones","Lo que sigue a la protrusión de la radícula ya es crecimiento de la plántula."],
+["¿Qué estructura del embrión suele emerger primero de la semilla?","La radícula","La plúmula","El cotiledón","El coleóptilo","La radícula asegura pronto el anclaje y la absorción de agua."],
+["¿Cuáles son los requisitos externos básicos para la germinación?","Agua, oxígeno y temperatura adecuada","Luz, nitrógeno y viento","Solo agua","Suelo fértil y fertilizante","Algunas semillas además requieren luz o la ruptura de su dormancia."],
+["En las semillas de cereales, ¿cuál es el principal tejido de reserva?","El endospermo","Los cotiledones","La testa","La radícula","El endospermo de cereales acumula almidón y proteínas; la aleurona lo rodea."],
+["En el frijol (semilla exalbuminosa), las reservas se encuentran en:","Los cotiledones","El endospermo","La testa","El hipocótilo","El endospermo es consumido durante el desarrollo de la semilla y las reservas pasan a los cotiledones."],
+["¿Cómo se llama la cubierta protectora de la semilla?","Testa (tegumento seminal)","Pericarpio","Coleorriza","Aleurona","La testa deriva de los tegumentos del óvulo."],
+["En la germinación epigea:","Los cotiledones son llevados por encima del suelo","Los cotiledones quedan bajo el suelo","No se forma raíz","La plántula no tiene hipocótilo","Ocurre en el frijol; la germinación hipogea ocurre en la arveja y el maíz."],
+["En las gramíneas, ¿qué estructura protege la plúmula al atravesar el suelo?","El coleóptilo","La coleorriza","El escutelo","La testa","El coleóptilo es una vaina que envuelve las primeras hojas."],
+["¿Qué diferencia una semilla quiescente de una semilla latente (dormante)?","La quiescente germina al recibir agua; la latente no germina aunque las condiciones sean favorables","La latente germina más rápido","La quiescente está muerta","No hay ninguna diferencia","La dormancia es un bloqueo interno que debe superarse."],
+["Una semilla con dormancia física por testa impermeable puede germinar tras:","La escarificación","La oscuridad total","Su congelamiento en seco","Un baño de etileno","Lijar, cortar o aplicar ácido sulfúrico permite la entrada de agua."],
+["La estratificación fría consiste en:","Mantener las semillas húmedas a baja temperatura durante semanas para romper la dormancia","Secar las semillas al sol","Remojarlas en agua caliente","Guardarlas en un congelador seco","Simula el invierno que muchas especies de clima templado necesitan."],
+["¿Cómo se calcula el porcentaje de germinación?","Semillas germinadas dividido por el total sembrado, por 100","Semillas muertas por 100","Días hasta germinar por 100","Peso de plántulas por 100","Se evalúa en condiciones estandarizadas y en un tiempo definido."],
+["En la prueba de tetrazolio, los tejidos vivos se tiñen de rojo porque:","Sus deshidrogenasas reducen el tetrazolio a formazán","Absorben más agua","Tienen clorofila","Liberan etileno","Es una prueba rápida de viabilidad que no requiere esperar la germinación."],
+["Las semillas ortodoxas:","Toleran la desecación y se conservan bien en frío y en seco","No toleran la desecación","Germinan dentro del fruto","Carecen de embrión","La mayoría de los cultivos de grano tienen semillas ortodoxas, aptas para bancos de germoplasma."],
+["¿Cuál de estas especies tiene semillas recalcitrantes?","Aguacate","Trigo","Frijol","Tomate","Las semillas recalcitrantes (aguacate, cacao, mango) mueren si se secan demasiado."],
+["La primera fase de la absorción de agua por la semilla (fase I) es:","Una imbibición rápida, de naturaleza principalmente física","Un crecimiento celular activo","La división del endospermo","La fotosíntesis de los cotiledones","Ocurre incluso en semillas muertas, por la afinidad de las paredes y reservas por el agua."],
+["El hipocótilo es:","La porción del eje embrionario entre los cotiledones y la radícula","La primera hoja","La cubierta de la semilla","El ápice de la raíz","Su elongación lleva los cotiledones fuera del suelo en la germinación epigea."],
+["En la curva trifásica de absorción de agua, la fase II se caracteriza por:","Una meseta de absorción con intensa activación metabólica","La rápida imbibición inicial","El crecimiento visible de la radícula","La muerte del embrión","En la fase III, la absorción vuelve a subir por el crecimiento de la radícula."],
+["Al inicio de la imbibición se observa una fuga de solutos desde la semilla porque:","Las membranas secas tardan en reorganizarse en su estructura funcional","La testa se disuelve","El embrión excreta azúcares activamente","La semilla está muerta","Una fuga excesiva es indicio de semillas de bajo vigor."],
+["En las primeras horas de imbibición la respiración puede ser parcialmente anaeróbica porque:","La testa y los tejidos hidratados limitan la difusión de O₂","La semilla no tiene mitocondrias","El etileno inhibe la respiración","La semilla fotosintetiza","A medida que se rompe la testa, predomina la respiración aeróbica."],
+["En semillas oleaginosas, los lípidos de reserva se convierten en azúcares mediante:","La β-oxidación en glioxisomas y el ciclo del glioxilato","La fotosíntesis","La glucólisis inversa en el núcleo","La fermentación alcohólica","El ciclo del glioxilato permite la síntesis neta de azúcares a partir de acetil-CoA."],
+["Las proteínas de reserva de la semilla se movilizan gracias a:","Proteasas que las hidrolizan en aminoácidos","Amilasas","Lipasas","Invertasas","Los aminoácidos liberados se usan para sintetizar nuevas proteínas en la plántula."],
+["La fitina (fitato) es en las semillas la principal reserva de:","Fósforo","Nitrógeno","Azufre","Almidón","La fitasa la degrada durante la germinación y libera fosfato e iones como Mg²⁺ y K⁺."],
+["El balance hormonal que controla la dormancia y la germinación es principalmente:","ABA, que mantiene la dormancia, frente a giberelinas, que promueven la germinación","Auxina frente a citoquinina","Etileno frente a jasmonato","Brasinoesteroides frente a estrigolactonas","Factores como la luz, el frío y la postmaduración desplazan este balance."],
+["La dormancia morfológica se debe a:","Un embrión inmaduro o poco desarrollado al dispersarse la semilla","Una testa impermeable","Un exceso de giberelinas","La falta de luz","El embrión debe terminar de crecer dentro de la semilla antes de germinar."],
+["La postmaduración (after-ripening) es:","La pérdida gradual de dormancia durante el almacenamiento en seco","La maduración del fruto después de cosechado","La germinación dentro del fruto","Un tratamiento con agua caliente","Durante este período baja la sensibilidad al ABA y aumenta la sensibilidad a giberelinas."],
+["Las karrikinas, presentes en el humo de incendios:","Estimulan la germinación de muchas especies","Inhiben toda germinación","Son hormonas de la floración","Destruyen el embrión","Permiten que algunas especies germinen tras el fuego, cuando hay menos competencia."],
+["Las estrigolactonas exudadas por las raíces estimulan la germinación de:","Plantas parásitas como Striga y Orobanche","Todas las malezas","Semillas de cereales","Esporas de Botrytis","Las semillas de estas parásitas germinan solo cerca de un hospedero."],
+["La prueba de envejecimiento acelerado evalúa:","El vigor de las semillas, exponiéndolas a alta temperatura y humedad antes de germinar","El contenido de proteínas","El color de la testa","El tamaño del embrión","Los lotes que mejor germinan tras este estrés tienen mayor vigor."],
+["La temperatura base (Tb) para la germinación es:","La temperatura por debajo de la cual la semilla no germina","La temperatura que da mayor velocidad","La temperatura que mata al embrión","La temperatura del suelo al mediodía","Junto con la óptima y la máxima, define las temperaturas cardinales de cada especie."],
+["El potencial hídrico base (Ψb) para la germinación es:","El potencial hídrico por debajo del cual la semilla no germina","El potencial de la semilla seca","El potencial del agua pura","El potencial del floema","Suelos más secos que Ψb impiden la germinación."],
+["El acondicionamiento osmótico (priming) de semillas consiste en:","Hidratarlas en forma controlada sin que emerja la radícula y luego secarlas","Sembrarlas en suelo saturado","Exponerlas a rayos X","Recubrirlas con fungicida solamente","Al sembrarlas, germinan más rápido y en forma más uniforme."],
+["La viviparidad (germinación en la planta madre) en maíz se asocia a mutantes:","Deficientes en la síntesis o la respuesta al ABA","Con exceso de ABA","Sin giberelinas","Sin endospermo","Sin ABA suficiente, el embrión no adquiere dormancia y germina en la mazorca."],
+["En semillas de tomate, el endospermo micropilar actúa como barrera a la radícula y se debilita por la acción de:","La endo-β-mananasa","La Rubisco","La invertasa","La polifenol oxidasa","Las giberelinas promueven este debilitamiento y el ABA lo inhibe."],
+["¿Qué gen se considera un regulador principal de la dormancia en Arabidopsis?","DOG1 (DELAY OF GERMINATION 1)","FLOWERING LOCUS T","SHORT-ROOT","WUSCHEL","Los niveles de la proteína DOG1 en la semilla seca se correlacionan con la profundidad de la dormancia."],
+["En la germinación, la señal de giberelinas actúa degradando la proteína represora DELLA RGL2 a través de:","El complejo SCF con la proteína F-box SLY1","La ACC oxidasa","El receptor TIR1","Las proteínas PIN","GID1 unido a GA se asocia a DELLA y SCF-SLY1 la marca para el proteasoma."],
+["ABI5 es un factor de transcripción que:","Reprime la germinación y el crecimiento de la plántula en respuesta al ABA","Promueve la síntesis de giberelinas","Es un receptor de luz","Degrada el almidón","Actúa como un punto de control tras la germinación ante condiciones adversas."],
+["En semillas fotoblásticas, la luz roja promueve la germinación porque el fitocromo B activo:","Promueve la degradación de PIL5 (PIF1), lo que aumenta las GA y reduce el ABA","Inhibe la síntesis de giberelinas","Destruye las proteínas DELLA directamente","Activa ABI5","PIL5 reprime genes de síntesis de GA y activa genes de síntesis de ABA."],
+["La respuesta de muy baja fluencia (VLFR) mediada por fitocromo A permite que algunas semillas:","Germinen con pulsos de luz extremadamente débiles, incluso de rojo lejano","Germinen solo con luz azul intensa","No respondan nunca a la luz","Germinen solo en oscuridad","Basta convertir una fracción mínima del fitocromo a Pfr."],
+["El óxido nítrico (NO) en semillas:","Promueve la ruptura de la dormancia","Induce dormancia profunda","Es un reservorio de nitrógeno","Bloquea la imbibición","Reduce la sensibilidad al ABA e interactúa con la señalización de giberelinas."],
+["La hipótesis de la ventana oxidativa propone que las especies reactivas de oxígeno:","En niveles moderados promueven la germinación; en exceso o en defecto la impiden","Siempre impiden la germinación","No intervienen en la semilla","Solo actúan en la floración","Las ROS pueden oxidar proteínas y modular el balance ABA/GA."],
+["En granos de cereales, a diferencia de la β-amilasa, la α-amilasa:","Se sintetiza de nuevo en la aleurona durante la germinación por acción de giberelinas","Está preformada en el endospermo seco","No degrada almidón","Solo actúa en hojas","La β-amilasa se acumula durante el desarrollo del grano en forma latente."],
+["GAMYB es un factor de transcripción que:","Es inducido por giberelinas y activa la expresión de la α-amilasa en la aleurona","Reprime la germinación","Es un receptor de ABA","Es un fotorreceptor","Su expresión aumenta cuando las DELLA se degradan."],
+["Tras secretar las enzimas hidrolíticas, las células de la aleurona:","Sufren muerte celular programada promovida por giberelinas y retrasada por ABA","Se transforman en raíces","Se vuelven fotosintéticas","Se dividen activamente","Su función termina con la movilización de reservas del endospermo."],
+["La dormancia secundaria es:","La dormancia inducida en semillas no dormantes por condiciones desfavorables","La dormancia que se forma en la planta madre","La segunda fase de imbibición","La germinación tras el fuego","Permite ciclos anuales de dormancia en el banco de semillas del suelo."],
+["En el modelo de hidrotiempo, si el potencial hídrico del suelo se acerca al potencial base (Ψb), el tiempo hasta la germinación:","Aumenta, tendiendo a infinito","Disminuye","No cambia","Se vuelve cero","θH = (Ψ − Ψb) · tg: si (Ψ − Ψb) tiende a cero, tg crece sin límite."],
+["Si una semilla tiene temperatura base de 5 °C y requiere un tiempo térmico de 100 °C·día, a 15 °C constante germinará en:","10 días","20 días","6,7 días","15 días","tg = θT / (T − Tb) = 100 / (15 − 5) = 10 días."],
+["¿Qué moléculas confieren tolerancia a la desecación en semillas ortodoxas?","Proteínas LEA y oligosacáridos como rafinosa, que favorecen un estado vítreo","Lignina y suberina","Clorofilas","Etileno y ACC","Protegen membranas y proteínas cuando el agua celular desaparece."],
+["Los experimentos con inhibidores muestran que la germinación temprana puede avanzar sin transcripción nueva, pero no sin traducción. Esto se debe a:","ARN mensajeros almacenados en la semilla seca","Proteínas sintetizadas por el endospermo muerto","La fotosíntesis del embrión","El ADN del cloroplasto exclusivamente","Los ARNm almacenados durante la maduración se traducen al iniciar la imbibición."],
+["La termoinhibición de la germinación en lechuga se produce porque las temperaturas altas:","Aumentan la síntesis de ABA y reducen la de giberelinas","Destruyen el fitocromo","Impiden la imbibición física","Activan la α-amilasa","Evita que la semilla germine en condiciones de calor poco favorables para la plántula."]]},
+{"name":"Interacción entre plantas","qs":[["¿Qué es la competencia entre plantas?","Una interacción en la que las plantas usan recursos limitados comunes y se perjudican mutuamente","Una relación donde ambas se benefician","Una relación donde una vive dentro de otra sin afectarla","El intercambio de polen","La competencia reduce el crecimiento, la reproducción o la supervivencia de los individuos involucrados."],
+["¿Por qué recursos compiten principalmente las plantas?","Luz, agua y nutrientes","Oxígeno atmosférico","Polinizadores únicamente","Dióxido de carbono exclusivamente","La competencia por luz ocurre arriba del suelo; por agua y nutrientes, en la rizosfera."],
+["La competencia intraespecífica ocurre entre:","Individuos de la misma especie","Individuos de especies distintas","Plantas y animales","Plantas y hongos","Suele ser intensa porque los individuos tienen requerimientos idénticos."],
+["Las malezas reducen el rendimiento de los cultivos principalmente porque:","Compiten por luz, agua y nutrientes","Producen etileno","Fijan nitrógeno","Aumentan la humedad del suelo","El período crítico de competencia es la etapa en que el cultivo debe estar libre de malezas."],
+["La alelopatía consiste en:","La liberación de compuestos químicos que afectan el crecimiento de plantas vecinas","La competencia por polinizadores","La unión de raíces de plantas distintas","La transferencia de genes entre especies","Los aleloquímicos pueden liberarse por lixiviación, exudación radical, volatilización o descomposición."],
+["Una planta parásita es aquella que:","Obtiene agua o nutrientes de otra planta mediante haustorios","Crece sobre otra planta solo como soporte","Intercambia nutrientes con un hongo","Se reproduce sin semillas","El haustorio penetra los tejidos del hospedero y se conecta a su sistema vascular."],
+["Una planta hemiparásita, como el muérdago:","Tiene clorofila y fotosintetiza, pero toma agua y minerales del hospedero","No tiene clorofila y depende totalmente del hospedero","Vive solo sobre rocas","Es un hongo","Se conecta principalmente al xilema del hospedero."],
+["Las epífitas, como muchas bromelias y orquídeas:","Crecen sobre otras plantas sin parasitarlas","Extraen savia del hospedero","Viven bajo el suelo","Son siempre trepadoras","Usan al árbol solo como soporte para acceder a la luz."],
+["Las lianas y trepadoras usan a otras plantas principalmente para:","Alcanzar la luz sin invertir mucho en tejido de sostén","Obtener agua de su xilema","Fijar nitrógeno","Protegerse del viento","Pueden reducir el crecimiento de sus soportes al competir por luz."],
+["¿Qué es la facilitación entre plantas?","Una interacción en la que una planta mejora las condiciones para otra","Una competencia muy intensa","El parasitismo de raíces","La polinización cruzada","Un ejemplo clásico es la planta nodriza en ambientes áridos o de alta montaña."],
+["La asociación maíz-frijol-calabaza (milpa) es un ejemplo de:","Interacciones positivas y uso complementario de recursos","Alelopatía severa","Parasitismo","Competencia excluyente","El maíz da soporte, el frijol aporta nitrógeno y la calabaza cubre el suelo."],
+["¿Cómo pueden las leguminosas beneficiar a las plantas vecinas?","Aportando nitrógeno gracias a la fijación simbiótica con rizobios","Produciendo sombra densa","Liberando herbicidas naturales","Consumiendo el fósforo del suelo","Al descomponerse sus residuos o por exudación, el nitrógeno fijado queda disponible para otras plantas."],
+["¿Qué son las micorrizas?","Asociaciones simbióticas entre raíces y hongos","Raíces parásitas","Bacterias fijadoras de nitrógeno","Pelos radicales","El hongo mejora la absorción de fósforo y agua; la planta le entrega carbohidratos."],
+["Una red micorrícica común puede:","Conectar las raíces de varias plantas a través de las hifas de un mismo hongo","Impedir toda fotosíntesis","Formar flores","Reemplazar al xilema","Por estas redes se han descrito movimientos de carbono, nutrientes y señales entre plantas."],
+["En ambientes áridos, una planta nodriza favorece a las plántulas bajo su copa porque:","Reduce la temperatura y la evaporación con su sombra","Les quita agua","Libera aleloquímicos","Aumenta la radiación directa","El efecto neto puede volverse competitivo cuando la plántula crece."],
+["La rotación de cultivos ayuda a reducir:","La acumulación de aleloquímicos y de patógenos específicos de un cultivo","La fotosíntesis","La fijación de nitrógeno","La germinación del cultivo","Alternar especies rompe ciclos de plagas y efectos negativos de residuos."],
+["La luz bajo el dosel de una vegetación densa está enriquecida en:","Rojo lejano","Rojo","Azul","Ultravioleta","Las hojas absorben el rojo y el azul, y reflejan o transmiten el rojo lejano."],
+["La juglona, compuesto alelopático del nogal negro (Juglans nigra):","Inhibe el crecimiento de muchas plantas cercanas","Estimula la germinación de todas las especies","Fija nitrógeno","Atrae polinizadores","Es una naftoquinona liberada desde hojas, raíces y cáscaras."],
+["La sorgoleona, exudada por las raíces del sorgo, actúa principalmente:","Inhibiendo el fotosistema II de las malezas","Estimulando la floración","Como fertilizante","Bloqueando la absorción de agua del sorgo","Es una benzoquinona lipofílica que interfiere con el transporte de electrones."],
+["La competencia por luz se considera asimétrica porque:","Las plantas más altas captan una parte desproporcionada de la luz","Todas reciben la misma luz","Solo compiten las plantas pequeñas","La luz no es un recurso limitante","Una pequeña ventaja inicial de altura se amplifica con el tiempo."],
+["La competencia subterránea por agua y nutrientes suele ser:","Más simétrica, aproximadamente proporcional al tamaño de las raíces","Más asimétrica que la competencia por luz","Inexistente","Exclusiva de la misma especie","Los recursos del suelo no se pueden monopolizar tan fácilmente como la luz."],
+["¿Cuál es una respuesta típica del síndrome de evasión de sombra?","La elongación de entrenudos y pecíolos","El aumento del grosor de las hojas","La reducción de la altura","El retraso de la floración siempre","También hay hiponastia, menor ramificación y, a menudo, floración más temprana."],
+["¿Qué fotorreceptor es el principal sensor de la razón rojo/rojo lejano en la evasión de sombra?","Fitocromo B","Fototropina 1","Criptocromo 2","UVR8","Con poca luz roja disminuye la forma activa Pfr del fitocromo B."],
+["Bajo una baja razón rojo/rojo lejano, las proteínas PIF se acumulan y promueven:","La síntesis de auxina (vía YUCCA), que induce la elongación","La síntesis de ABA y el cierre estomático","La degradación de giberelinas","La formación de tubérculos","El fitocromo B activo normalmente inactiva y degrada a las PIF."],
+["Las especies tolerantes a la sombra del sotobosque, en lugar de elongarse:","Ajustan su fisiología para aprovechar poca luz","Siempre crecen más rápido en altura","Florecen inmediatamente","Pierden sus hojas","Tienen menor punto de compensación lumínico y hojas más delgadas y amplias."],
+["Striga, una plaga de cereales en África, es:","Una planta hemiparásita de raíces","Un hongo patógeno","Un insecto","Una bacteria fijadora","Se conecta a las raíces del hospedero y reduce gravemente el rendimiento."],
+["La formación del haustorio en plantas parásitas de raíz se induce por:","Compuestos de la raíz del hospedero, como quinonas (por ejemplo, DMBQ)","La luz solar directa","El viento","El etileno del aire","Así la parásita forma haustorios solo al contactar a un hospedero adecuado."],
+["Las plántulas de Cuscuta localizan a su hospedero mediante:","Compuestos volátiles emitidos por el hospedero","Ecolocalización","Raíces profundas","Simbiosis con hongos","Crecen orientándose hacia los volátiles de plantas como el tomate."],
+["Los volátiles emitidos por plantas dañadas por herbívoros pueden:","Preparar (priming) las defensas de plantas vecinas","Matar a las plantas vecinas","Atraer más herbívoros siempre","Aumentar la fotosíntesis de los vecinos","Las plantas expuestas responden más rápido y con más fuerza a un ataque posterior."],
+["El metil jasmonato puede actuar en la comunicación entre plantas como:","Una señal volátil que induce defensas en plantas vecinas","Un pigmento fotosintético","Un nutriente nitrogenado","Un inhibidor de la germinación de cereales","Es la forma volátil del ácido jasmónico."],
+["La rizosfera es:","La zona del suelo influida por las raíces y sus exudados","La capa más profunda del suelo","La parte aérea de la planta","El tejido interno de la raíz","Allí ocurren muchas interacciones químicas entre plantas y microorganismos."],
+["Algunas plantas, como Cakile edentula, muestran reconocimiento de parentesco porque:","Reducen su inversión en raíces cuando crecen junto a parientes","Florecen solo con parientes","Liberan toxinas solo contra parientes","Se fusionan con sus parientes","Frente a extraños aumentan la asignación a raíces y compiten más."],
+["La ley del rendimiento final constante establece que, a densidades altas:","La biomasa total por unidad de área se vuelve aproximadamente constante","La biomasa total crece sin límite","Todas las plantas mueren","El rendimiento depende solo del agua","Más plantas implican individuos más pequeños, compensando el número."],
+["El autoaligeramiento (ley de −3/2) describe que, en poblaciones densas:","Al aumentar el peso medio de las plantas, mueren individuos según una relación de pendiente −3/2","El número de plantas aumenta con el tiempo","La biomasa por planta se mantiene constante","Las plantas pequeñas eliminan a las grandes","La relación entre el log del peso medio y el log de la densidad tiene una pendiente cercana a −3/2."],
+["En cultivos asociados, un índice equivalente de tierra (LER) mayor que 1 indica que:","La asociación es más productiva que los monocultivos por separado","El monocultivo es mejor","Ambos cultivos fracasaron","No hay competencia","El LER suma los rendimientos relativos de cada cultivo respecto a su monocultivo."],
+["En una asociación, el maíz alcanza el 80 % de su rendimiento en monocultivo y el frijol el 50 %. ¿Cuál es el LER?","1,3","0,4","0,8","1,0","LER = 0,8 + 0,5 = 1,3: se necesitaría un 30 % más de tierra en monocultivo para producir lo mismo."],
+["Según el modelo de competencia de Lotka-Volterra, dos especies coexisten cuando:","La competencia intraespecífica es mayor que la interespecífica en ambas","La interespecífica es mayor en ambas","Una especie tiene mayor capacidad de carga","No hay competencia de ningún tipo","Cada especie se limita más a sí misma que a la otra."],
+["Según la teoría R* de Tilman, en competencia por un único recurso limitante gana la especie que:","Puede sobrevivir con la menor concentración del recurso (menor R*)","Crece más rápido con recursos abundantes","Es más alta","Produce más semillas","Esa especie reduce el recurso por debajo de lo que necesitan las demás."],
+["¿Por qué se dice que las estrigolactonas son una señal de doble filo en la rizosfera?","Atraen hongos micorrícicos beneficiosos, pero también estimulan la germinación de plantas parásitas","Son a la vez hormona de raíz y de flor","Inhiben y promueven la fotosíntesis","Son tóxicas para la planta que las produce","Su exudación aumenta con la deficiencia de fósforo."],
+["Durante la infección, Cuscuta puede silenciar genes de su hospedero mediante:","MicroARN transferidos a través del haustorio","Toxinas proteicas en el aire","Bloqueo de los estomas","Inyección de etileno","Estos ARN pequeños se mueven al hospedero y reducen la expresión de genes de defensa."],
+["Las plantas parásitas como Cuscuta y Rafflesia son conocidas por presentar frecuentemente:","Transferencia horizontal de genes desde sus hospederos","Ausencia total de ADN","Reproducción solo por esporas","Fotosíntesis C4","El contacto íntimo con el hospedero favorece el intercambio de material genético."],
+["Rafflesia, que produce la flor individual más grande del mundo, es:","Una holoparásita endófita de lianas del género Tetrastigma","Una epífita con clorofila","Un árbol emergente","Una hemiparásita de pastos","Vive dentro del hospedero y solo se hace visible al florecer."],
+["Además de la razón rojo/rojo lejano, las plantas pueden detectar vecinos por:","La disminución de luz azul percibida por criptocromos y el contacto con hojas vecinas","Las ondas de radio","La gravedad","El campo magnético terrestre","La luz azul y la UV-B filtradas por el follaje también modulan la evasión de sombra."],
+["En tomate, el volátil (Z)-3-hexenol emitido por plantas atacadas se convierte en las plantas vecinas en:","Un glucósido defensivo que reduce el desempeño de los herbívoros","Etileno","Clorofila","Sacarosa","Es un ejemplo de defensa basada en volátiles captados del aire."],
+["La hipótesis de las nuevas armas en plantas invasoras propone que:","Los aleloquímicos de la invasora son muy eficaces contra especies nativas que no han coevolucionado con ellos","Las invasoras carecen de compuestos químicos","Las nativas son siempre más competitivas","La invasión depende solo del clima","Se ha planteado, por ejemplo, para Centaurea stoebe y su exudado radical."],
+["La hipótesis de liberación de enemigos explica el éxito de algunas invasoras porque:","En el nuevo rango escapan de sus herbívoros y patógenos naturales","Son polinizadas por más insectos","Tienen raíces más profundas siempre","Son más pequeñas","Pueden destinar más recursos al crecimiento y la competencia."],
+["En el sistema push-pull para maíz, la leguminosa Desmodium intercalada:","Suprime a Striga por alelopatía radical y repele a los barrenadores del tallo","Fija carbono para el maíz","Atrae más plagas al maíz","Sirve solo como alimento","Se combina con un pasto trampa en el borde que atrae a las plagas."],
+["¿Cómo responden muchas plantas a un suelo con parches ricos en nutrientes?","Proliferan sus raíces preferentemente en esos parches","Detienen el crecimiento radical","Liberan sus nutrientes al suelo","Pierden sus pelos radicales","Esta plasticidad aumenta su capacidad competitiva por recursos del suelo."],
+["Las plantas micoheterótrofas, como Monotropa:","Carecen de clorofila y obtienen carbono de otras plantas a través de la red micorrícica","Son parásitas directas de raíces","Hacen fotosíntesis CAM","Son epífitas","Explotan al hongo, que a su vez recibe carbono de árboles vecinos."],
+["Según la hipótesis del gradiente de estrés:","La facilitación entre plantas se vuelve más importante en ambientes más estresantes","La competencia aumenta en ambientes estresantes","Las interacciones desaparecen en ambientes extremos","Solo hay parasitismo en ambientes fértiles","En ambientes benignos predominaría la competencia."]]},
+{"name":"Fitohormonas","qs":[["¿Qué es una fitohormona?","Una molécula orgánica que, en concentraciones muy bajas, regula el crecimiento y el desarrollo","Un nutriente mineral","Una enzima digestiva","Un pigmento fotosintético","Puede actuar en el sitio de síntesis o lejos de él."],
+["¿Cuál es la principal auxina natural de las plantas?","Ácido indol-3-acético (AIA)","Ácido abscísico","Ácido giberélico","Zeatina","El AIA deriva principalmente del triptófano."],
+["En el fototropismo, el tallo se curva hacia la luz porque:","La auxina se redistribuye al lado sombreado y estimula su elongación","La auxina se acumula en el lado iluminado","El etileno inhibe el lado sombreado","La clorofila empuja el tallo","El lado sombreado crece más y el tallo se curva hacia la luz."],
+["La dominancia apical se explica principalmente porque:","La auxina del ápice inhibe el crecimiento de las yemas laterales","Las citoquininas del ápice estimulan las yemas","El ABA promueve las ramas","El ápice no produce hormonas","Al cortar el ápice, las yemas laterales brotan. Las estrigolactonas y las citoquininas también participan."],
+["¿Qué efecto característico tienen las giberelinas?","Promueven la elongación del tallo","Cierran los estomas","Inducen la abscisión de hojas","Inhiben la germinación","Los mutantes deficientes en giberelinas suelen ser enanos."],
+["¿Qué procesos promueven las citoquininas?","La división celular y el retraso de la senescencia foliar","El cierre estomático","La maduración de frutos","La dormancia de semillas","Su nombre viene de la citocinesis."],
+["¿Qué hormona se asocia al estrés hídrico, la dormancia y el cierre estomático?","Ácido abscísico (ABA)","Auxina","Giberelina","Citoquinina","El ABA aumenta rápidamente en hojas sometidas a déficit hídrico."],
+["¿Cuál de estos procesos regula el etileno?","La maduración de frutos y la abscisión de órganos","La fotosíntesis","La fijación de nitrógeno","La síntesis de clorofila","Es la única hormona vegetal gaseosa."],
+["La triple respuesta al etileno en plántulas etioladas consiste en:","Tallo más corto y grueso, con crecimiento horizontal y gancho apical exagerado","Tallo más largo y delgado","Hojas más grandes","Raíces aéreas","Ayuda a la plántula a atravesar obstáculos en el suelo."],
+["¿Qué tipo de hormona se usa para enraizar esquejes?","Auxinas sintéticas como AIB o ANA","Giberelinas","Ácido abscísico","Etileno","Las auxinas promueven la formación de raíces adventicias."],
+["El 2,4-D es:","Un herbicida auxínico selectivo contra dicotiledóneas","Una giberelina sintética","Un inhibidor del etileno","Una citoquinina natural","En dosis altas provoca un crecimiento descontrolado y la muerte de las malezas de hoja ancha."],
+["En uvas sin semilla, la aplicación de giberelinas se usa para:","Aumentar el tamaño de las bayas","Oscurecer la piel","Inducir semillas","Retrasar la floración","También alarga el raquis, lo que deja racimos menos compactos."],
+["Los brasinoesteroides son hormonas de naturaleza:","Esteroidea","Peptídica","Gaseosa","Derivada del triptófano","Son esenciales para la elongación celular; sus mutantes son enanos."],
+["El ácido jasmónico está asociado principalmente con:","La defensa contra herbívoros y algunos patógenos necrótrofos","La germinación de cereales","La apertura estomática","La fijación de CO₂","También participa en el desarrollo del polen y en la respuesta a heridas."],
+["El ácido salicílico es clave para:","La resistencia sistémica adquirida contra patógenos","La elongación del tallo","La maduración de frutos","El enraizamiento","Su acumulación activa genes de proteínas relacionadas con la patogénesis (PR)."],
+["Las estrigolactonas, como hormonas, inhiben:","La ramificación del tallo","La germinación de todas las semillas","La fotosíntesis","La elongación de raíces siempre","Los mutantes sin estrigolactonas presentan una ramificación excesiva."],
+["¿Dónde se sintetiza una gran parte de las citoquininas que viajan por la planta?","En los ápices radicales","En las flores","En la cutícula","En el floema exclusivamente","Viajan por el xilema hacia la parte aérea, aunque también se producen en otros órganos."],
+["En la raíz, la gravedad se percibe en la columela de la cofia gracias a:","Estatolitos (amiloplastos) que sedimentan","Fototropinas","Cristales de oxalato","Granos de polen","Su sedimentación redistribuye a los transportadores de auxina."],
+["En el gravitropismo de la raíz, la auxina se acumula en el lado inferior y:","Inhibe la elongación de ese lado, curvando la raíz hacia abajo","Estimula la elongación de ese lado","No tiene efecto","Promueve la división de la cofia","Las células de la raíz son más sensibles a la auxina que las del tallo."],
+["La abscisión foliar se favorece cuando:","Disminuye la auxina que llega desde la hoja y aumenta el etileno en la zona de abscisión","Aumenta la auxina de la hoja","Disminuye el etileno","Aumentan las citoquininas en la hoja","El etileno induce enzimas como celulasas y poligalacturonasas que separan las células."],
+["En cultivo de tejidos, una relación citoquinina/auxina alta favorece la formación de:","Brotes (tallos)","Raíces","Solo callo indiferenciado","Semillas","Una relación inversa induce raíces; valores intermedios mantienen el callo (Skoog y Miller)."],
+["El paclobutrazol se usa como retardante del crecimiento porque:","Inhibe la biosíntesis de giberelinas","Activa los receptores de auxina","Libera etileno","Es una citoquinina","Bloquea la oxidación del ent-kaureno, un paso temprano de la ruta."],
+["El ABA se sintetiza a partir de carotenoides, y la enzima limitante de su ruta es:","La 9-cis-epoxicarotenoide dioxigenasa (NCED)","La ACC sintasa","La GA 20-oxidasa","La triptófano aminotransferasa","Su expresión aumenta rápidamente con el déficit hídrico."],
+["¿Cuál es generalmente el paso limitante de la biosíntesis del etileno?","La síntesis de ACC por la ACC sintasa","La oxidación del ACC","La síntesis de metionina","La liberación de etileno al aire","La ACC sintasa se regula a nivel transcripcional y por la estabilidad de la proteína."],
+["La principal ruta de biosíntesis de auxina es:","Triptófano → ácido indol-3-pirúvico (TAA1) → AIA (YUCCA)","Metionina → ACC → AIA","Mevalonato → AIA","Carotenoides → AIA","Las enzimas TAA1 y YUCCA son clave en esta ruta de dos pasos."],
+["En plantas en roseta, la aplicación de giberelinas puede:","Inducir la elongación del tallo floral (espigado) y sustituir requerimientos de frío o días largos en algunas especies","Impedir la floración en todas las especies","Inducir dormancia","Cerrar los estomas","Es un ejemplo clásico de la acción de las GA en la transición floral."],
+["El receptor de auxina TIR1 es:","Una proteína F-box que, con la auxina, se une a represores Aux/IAA","Una histidina quinasa de membrana","Un canal iónico","Un receptor del RE","TIR1 forma parte del complejo ubiquitina-ligasa SCF."],
+["Los receptores de citoquininas (como AHK4/CRE1) son:","Histidina quinasas que inician un sistema de fosforelevo de dos componentes","Proteínas F-box","Receptores de tipo PYR","Canales de calcio","El fosfato pasa a proteínas AHP y luego a reguladores de respuesta (ARR) en el núcleo."],
+["Los receptores de ABA de la familia PYR/PYL/RCAR:","Al unir ABA inhiben a las fosfatasas PP2C","Activan a la proteína DELLA","Son proteínas F-box","Son quinasas de membrana","Al inhibir las PP2C se liberan las quinasas SnRK2 que activan la respuesta."],
+["¿Dónde se localizan los receptores de etileno como ETR1?","En la membrana del retículo endoplasmático","En el núcleo","En la pared celular","En el cloroplasto","El etileno, al ser liposoluble, alcanza fácilmente estas membranas internas."],
+["El receptor de brasinoesteroides BRI1 es:","Una quinasa tipo receptor rica en repeticiones de leucina en la membrana plasmática","Un receptor nuclear como en animales","Una proteína F-box","Un canal iónico","A diferencia de los esteroides animales, los brasinoesteroides se perciben en la superficie celular."],
+["La forma bioactiva del jasmonato, percibida por el receptor COI1, es:","Jasmonoil-isoleucina (JA-Ile)","Metil jasmonato","Ácido 12-oxofitodienoico","Ácido jasmónico libre","COI1 une JA-Ile y degrada a los represores JAZ."],
+["La interacción entre las vías del ácido salicílico y del ácido jasmónico suele ser:","Antagónica: la activación de una tiende a reprimir la otra","Siempre sinérgica","Inexistente","Igual a la de auxina y citoquinina","Esto permite priorizar la defensa contra biótrofos o contra necrótrofos y herbívoros."],
+["La expresión del gen IPT (síntesis de citoquininas) bajo el promotor SAG12, activo en la senescencia, produce plantas que:","Retrasan la senescencia de sus hojas","Florecen antes","Pierden sus hojas más rápido","No forman raíces","Es un sistema autorregulado: cuando la hoja empieza a envejecer, produce citoquininas."],
+["En la señalización de auxina, la hormona actúa como un pegamento molecular que:","Une a TIR1 con los represores Aux/IAA, que se ubiquitinan y degradan","Activa una quinasa de membrana","Abre canales de calcio","Se une al ADN directamente","Al degradarse los Aux/IAA, los factores ARF quedan libres para regular genes."],
+["Los factores de respuesta a auxina (ARF):","Se unen a elementos de respuesta a auxina (AuxRE) en los promotores de genes","Son receptores de membrana","Transportan auxina entre células","Sintetizan AIA","Pueden activar o reprimir la transcripción según el tipo de ARF."],
+["La hipótesis de canalización de la auxina explica:","La formación de tejido vascular a lo largo de rutas de flujo de auxina","La abscisión de frutos","El cierre de estomas","La germinación de cereales","El flujo de auxina refuerza su propio transporte y define la ubicación de los haces vasculares."],
+["Además de los PIN, ¿qué transportadores participan en el movimiento de auxina?","Los transportadores de influjo AUX1/LAX y los ABCB","Las acuaporinas","Los transportadores SWEET","Los canales SLAC1","AUX1/LAX facilitan la entrada; los ABCB, el transporte dependiente de ATP."],
+["Según el modelo quimiosmótico del transporte polar de auxina:","El AIA protonado entra por difusión desde el apoplasto ácido; en el citosol se ioniza y solo sale por transportadores","El AIA se mueve solo por el xilema","El AIA se transporta unido a sacarosa","El AIA atraviesa los plasmodesmos sin control","La ubicación asimétrica de los transportadores de salida da la dirección del flujo."],
+["Los alelos Rht que permitieron los trigos semienanos de la Revolución Verde codifican:","Proteínas DELLA mutantes resistentes a la degradación","Enzimas de síntesis de auxina","Receptores de etileno sin función","Citoquinina oxidasas","Las plantas responden menos a las giberelinas, son más bajas y resisten el vuelco."],
+["El gen semienano sd1 del arroz de la Revolución Verde afecta a:","Una GA 20-oxidasa de la biosíntesis de giberelinas","Un receptor de auxina","Una proteína DELLA","La ACC sintasa","A diferencia del trigo Rht, aquí la planta produce menos giberelina activa."],
+["En la señalización del etileno, cuando la hormona se une a sus receptores:","CTR1 se inactiva, el extremo C de EIN2 se escinde y va al núcleo, estabilizando a EIN3","CTR1 se activa y fosforila EIN3","Los receptores se degradan en el proteasoma","Se libera ACC","EIN3 y EIL1 activan la transcripción de los genes de respuesta."],
+["En la señalización del ABA, la inhibición de las PP2C permite que las quinasas SnRK2:","Fosforilen factores de transcripción ABF/AREB y canales como SLAC1","Degraden al ABA","Sinteticen giberelinas","Activen la H⁺-ATPasa para abrir estomas","Así se coordinan las respuestas rápidas (estomas) y lentas (expresión génica)."],
+["La percepción de estrigolactonas involucra al receptor D14, que con MAX2 promueve:","La degradación de los represores D53/SMXL","La síntesis de auxina","La apertura de estomas","La degradación de DELLA","D14 es una α/β-hidrolasa que además hidroliza a la hormona."],
+["Las karrikinas son percibidas por KAI2, que es:","Un parálogo del receptor de estrigolactonas D14","Un receptor de auxina","Un fitocromo","Una proteína DELLA","KAI2 también usa a MAX2 y se cree que percibe una hormona endógena aún no identificada."],
+["En la señalización de citoquininas, los reguladores de respuesta tipo A (ARR tipo A):","Ejercen retroalimentación negativa sobre la vía","Son los receptores de la hormona","Sintetizan citoquininas","Son factores de transcripción activadores principales","Los ARR tipo B son los factores de transcripción que activan los genes de respuesta, incluidos los tipo A."],
+["En arroz, la menor actividad de la citoquinina oxidasa/deshidrogenasa (gen Gn1a) produce:","Más citoquinina en la panoja y más granos","Plantas sin flores","Mayor senescencia","Menos ramificación","CKX degrada citoquininas; reducirla aumenta la actividad del meristemo floral."],
+["En la señalización de brasinoesteroides, la unión de la hormona a BRI1 conduce a:","La inactivación de la quinasa BIN2, lo que permite la acción de BZR1/BES1","La activación de BIN2","La degradación de BRI1","La síntesis de etileno","BIN2 fosforila e inactiva a BZR1/BES1 en ausencia de la hormona."],
+["En la resistencia sistémica adquirida, NPR1:","Es un regulador clave de la respuesta al ácido salicílico que activa genes de defensa","Es la enzima que sintetiza jasmonato","Es un receptor de auxina","Degrada el ácido salicílico","El metil salicilato y otras moléculas actúan como señales móviles hacia tejidos distantes."],
+["En la raíz, la citoquinina promueve la diferenciación celular en la zona de transición induciendo:","SHY2, un represor Aux/IAA que reduce la respuesta y el transporte de auxina","La degradación de DELLA","La síntesis de ABA","La apertura de estomas","El balance auxina-citoquinina define el tamaño del meristemo radical."]]}];
+
+// ---------- Compañeros simulados ----------
+const NAMES = ["Valentina R.","Mateo G.","Camila S.","Sebastián P.","Isidora M.","Benjamín T.","Antonia V.","Tomás L.","Florencia D.","Joaquín A.",
+"Martina C.","Lucas F.","Josefa N.","Agustín H.","Catalina B.","Vicente O.","Emilia Q.","Diego U.","Sofía K.","Maximiliano E.",
+"Trinidad Z.","Nicolás Y.","Amanda W.","Ignacio X.","Fernanda J.","Cristóbal I.","Javiera R.","Felipe S.","Renata M.","Gabriel P.",
+"Constanza L.","Matías V.","Paula G.","Andrés C."];
+
+const $ = id => document.getElementById(id);
+const cv = $("cv"), ctx = cv.getContext("2d"), wrap = $("wrap");
+let W=0,H=0,S=1;
+function resize(){
+  const r = wrap.getBoundingClientRect(), d = Math.min(window.devicePixelRatio||1, 2);
+  W=r.width; H=r.height; S=Math.min(W,H)/420;
+  cv.width=Math.round(W*d); cv.height=Math.round(H*d); ctx.setTransform(d,0,0,d,0,0);
+}
+new ResizeObserver(resize).observe(wrap); resize();
+
+const ROUND = 270, LEVEL_TIME = 45;
+let G, bots, pools = LEVELS.map(()=>[[],[],[]]), keys = {}, pointerX = null, last = 0, quizMode = null, botTimer = 0;
+
+function newGame(){
+  G = {running:false, energy:100, score:0, time:ROUND, px:.5, items:[], fx:[], spawn:0, hurt:0, glow:0, right:0, asked:0, level:0, banner:null, lvlAsked:[0,0,0,0,0,0],
+       name: ($("nameIn").value.trim()||"Tú").slice(0,18)};
+  bots = NAMES.map(n => ({n, s:0, rate: 7 + Math.random()*14}));
+}
+newGame();
+
+// ---------- Entrada ----------
+addEventListener("keydown", e => { keys[e.key.toLowerCase()] = true; if(["arrowleft","arrowright"," "].includes(e.key.toLowerCase())&&G.running) e.preventDefault(); });
+addEventListener("keyup", e => keys[e.key.toLowerCase()] = false);
+wrap.addEventListener("pointerdown", e => { pointerX = (e.clientX - wrap.getBoundingClientRect().left)/W; wrap.setPointerCapture(e.pointerId); });
+wrap.addEventListener("pointermove", e => { if(pointerX!==null) pointerX = (e.clientX - wrap.getBoundingClientRect().left)/W; });
+["pointerup","pointercancel"].forEach(t => wrap.addEventListener(t, () => pointerX = null));
+function hold(btn, k){
+  btn.addEventListener("pointerdown", e => { e.preventDefault(); keys[k]=true; });
+  ["pointerup","pointerleave","pointercancel"].forEach(t => btn.addEventListener(t, () => keys[k]=false));
+}
+hold($("btnL"),"arrowleft"); hold($("btnR"),"arrowright");
+
+// ---------- Objetos que caen ----------
+const KINDS = {
+  photon:{w:40, r:11, pts:10, en:2},
+  water:{w:22, r:10, pts:5, en:6},
+  co2:{w:14, r:13, pts:15, en:0},
+  aphid:{w:0, r:12, pts:0, en:-15, pest:true},
+  fungus:{w:0, r:12, pts:0, en:-15, pest:true}
+};
+// Plagas por nivel: más frecuentes y más rápidas a medida que avanza el temario
+function pestShare(L){ return .2 + L*.09; }        // 20 % de los objetos en el nivel 1, 65 % en el nivel 6
+function pestSpeed(L){ return 1 + L*.38; }         // hasta 2,9 veces más rápidas en el nivel 6
+function spawnGap(L){ return Math.max(.16, .46 - L*.055); }
+function spawnItem(){
+  const L = G.level; let k;
+  if(Math.random() < pestShare(L)) k = Math.random()<.55 ? "aphid" : "fungus";
+  else { const r = Math.random()*76; k = r<40 ? "photon" : r<62 ? "water" : "co2"; }
+  let vy = 0.22 + Math.random()*.12 + L*.02;
+  if(KINDS[k].pest) vy *= pestSpeed(L) * (.85 + Math.random()*.3);
+  G.items.push({k, x: .06 + Math.random()*.88, y:-20, vy, wob:Math.random()*6});
+  // en niveles altos las plagas a veces caen en grupo
+  if(KINDS[k].pest && L>=3 && Math.random()<.15*(L-2)) G.items.push({k, x: Math.max(.06,Math.min(.94,.06+Math.random()*.88)), y:-60, vy:vy*(.9+Math.random()*.2), wob:Math.random()*6});
+}
+
+// ---------- Bucle ----------
+function tick(t){
+  const dt = Math.min(.05, (t-last)/1000 || 0); last = t;
+  if(G.running && !quizMode) update(dt);
+  draw(t/1000);
+  requestAnimationFrame(tick);
+}
+function update(dt){
+  // movimiento
+  const sp = 1.05;
+  if(keys["arrowleft"]||keys["a"]) G.px -= sp*dt;
+  if(keys["arrowright"]||keys["d"]) G.px += sp*dt;
+  if(pointerX!==null) G.px += Math.max(-sp*dt, Math.min(sp*dt, pointerX - G.px));
+  G.px = Math.max(.05, Math.min(.95, G.px));
+
+  G.time -= dt; G.energy -= 2.2*dt;
+  G.hurt = Math.max(0, G.hurt-dt); G.glow = Math.max(0, G.glow-dt);
+  G.spawn -= dt;
+  if(G.spawn<=0){ spawnItem(); G.spawn = spawnGap(G.level) * (.8 + Math.random()*.5); }
+
+  const hx = G.px*W, hy = H - 92*S;
+  for(const it of G.items){
+    it.y += it.vy*H*dt; it.wob += dt*3;
+    const ix = it.x*W + Math.sin(it.wob)*6*S;
+    const k = KINDS[it.k];
+    if(!it.dead && Math.hypot(ix-hx, it.y-hy) < (k.r+30)*S){
+      it.dead = true;
+      G.score += k.pts; G.energy = Math.min(100, G.energy + k.en);
+      if(k.en<0) G.hurt = .5; else G.glow = .35;
+      G.fx.push({x:ix, y:it.y, txt: k.en<0 ? "−15 ATP" : "+"+k.pts, c: k.en<0 ? (it.k==="fungus"?"#c9a7ff":"#ef6a8a") : (it.k==="water"?"#5ec8f2":"#ffc94a"), life:1});
+    }
+  }
+  G.items = G.items.filter(i => !i.dead && i.y < H+30);
+  G.fx.forEach(f => {f.life -= dt*1.4; f.y -= 40*dt;}); G.fx = G.fx.filter(f=>f.life>0);
+
+  botTimer += dt;
+  if(botTimer>=1){ botTimer=0; if(!LIVE) bots.forEach(b => b.s += Math.round(b.rate*(.5+Math.random()))); renderBoard(); }
+
+  const lv = Math.min(LEVELS.length-1, Math.floor((ROUND-G.time)/LEVEL_TIME));
+  if(lv!==G.level){ G.level=lv; G.banner={txt:"Nivel "+(lv+1)+": "+LEVELS[lv].name, life:3}; }
+  if(G.banner){ G.banner.life-=dt; if(G.banner.life<=0) G.banner=null; }
+  if(G.energy<=0){ G.energy=0; openQuiz("forced"); }
+  if(G.time<=0){ G.time=0; finish(); }
+  sendScore(false);
+  renderHud();
+}
+
+// ---------- Fondo: campos de cultivo (se dibuja una vez por tamaño) ----------
+let bg = null;
+function buildBackground(){
+  const d = Math.min(window.devicePixelRatio||1, 2);
+  bg = document.createElement("canvas"); bg.width = Math.round(W*d); bg.height = Math.round(H*d);
+  const b = bg.getContext("2d"); b.setTransform(d,0,0,d,0,0);
+  const horizon = H*.42, ground = H-34*S;
+  // cielo
+  const sky = b.createLinearGradient(0,0,0,horizon);
+  sky.addColorStop(0,"#6fb8e0"); sky.addColorStop(1,"#d9efd8");
+  b.fillStyle=sky; b.fillRect(0,0,W,horizon+2);
+  // sol
+  const sx=W*.82, sy=H*.11, sun=b.createRadialGradient(sx,sy,4,sx,sy,90*S);
+  sun.addColorStop(0,"rgba(255,236,160,1)"); sun.addColorStop(.3,"rgba(255,214,102,.9)"); sun.addColorStop(1,"rgba(255,214,102,0)");
+  b.fillStyle=sun; b.beginPath(); b.arc(sx,sy,90*S,0,7); b.fill();
+  // nubes
+  b.fillStyle="rgba(255,255,255,.75)";
+  [[.18,.1,1],[.5,.16,.8]].forEach(([cx,cy,k])=>{ const x=W*cx,y=H*cy,r=16*S*k;
+    b.beginPath(); b.arc(x,y,r,0,7); b.arc(x+r,y-r*.5,r*1.2,0,7); b.arc(x+r*2.2,y,r,0,7); b.fill(); });
+  // cerros lejanos (Andes)
+  b.fillStyle="#7da7a0"; b.beginPath(); b.moveTo(0,horizon);
+  for(let x=0;x<=W;x+=W/8){ b.lineTo(x, horizon - (30+Math.abs(Math.sin(x*.013))*55)*S); }
+  b.lineTo(W,horizon); b.fill();
+  b.fillStyle="#6b9a5a"; b.beginPath(); b.moveTo(0,horizon);
+  for(let x=0;x<=W;x+=W/12){ b.lineTo(x, horizon - (12+Math.abs(Math.cos(x*.02))*22)*S); }
+  b.lineTo(W,horizon); b.fill();
+  // parcelas de cultivo en perspectiva
+  const plots = [["#8fbf4a","#7aab3b"],["#c9b44a","#b8a23c"],["#5f9e3a","#4f8a2f"]];
+  const bands = [horizon, horizon+(ground-horizon)*.22, horizon+(ground-horizon)*.5, ground];
+  for(let p=0;p<3;p++){
+    const y0=bands[p], y1=bands[p+1];
+    b.fillStyle=plots[p][0]; b.fillRect(0,y0,W,y1-y0);
+    b.strokeStyle=plots[p][1]; b.lineWidth=(1.5+p*1.5)*S;
+    const rows = 22 - p*4;
+    for(let i=-rows;i<=rows*2;i++){
+      const xt = W/2 + (i - rows/2)*(W/rows)*.5, xb = W/2 + (i - rows/2)*(W/rows)*1.6;
+      b.beginPath(); b.moveTo(xt + (xb-xt)*((y0-horizon)/(ground-horizon)), y0);
+      b.lineTo(xt + (xb-xt)*((y1-horizon)/(ground-horizon)), y1); b.stroke();
+    }
+  }
+  // cerca
+  b.strokeStyle="#7a5434"; b.lineWidth=3*S;
+  const fy = ground-26*S;
+  b.beginPath(); b.moveTo(0,fy); b.lineTo(W,fy); b.moveTo(0,fy+10*S); b.lineTo(W,fy+10*S); b.stroke();
+  for(let x=10*S;x<W;x+=46*S){ b.fillStyle="#6a4529"; b.fillRect(x,fy-8*S,5*S,34*S); }
+  // camino de tierra
+  b.fillStyle="#7b5233"; b.fillRect(0,ground,W,34*S);
+  b.fillStyle="#946543"; b.fillRect(0,ground,W,5*S);
+}
+
+// ---------- Dibujo ----------
+function draw(T){
+  if(!bg || bg._w!==W || bg._h!==H){ buildBackground(); bg._w=W; bg._h=H; }
+  ctx.drawImage(bg,0,0,W,H);
+  for(const it of G.items) drawItem(it, T);
+  drawBerry(T);
+  ctx.textAlign="center"; ctx.font=`700 ${15*S+4}px Atkinson Hyperlegible, sans-serif`;
+  ctx.lineWidth=4; ctx.strokeStyle="rgba(10,20,14,.85)";
+  for(const f of G.fx){ ctx.globalAlpha=Math.max(0,f.life); ctx.strokeText(f.txt,f.x,f.y); ctx.fillStyle=f.c; ctx.fillText(f.txt,f.x,f.y); }
+  ctx.globalAlpha=1;
+  if(G.banner){
+    const a=Math.min(1,G.banner.life), fs=Math.max(16,20*S);
+    ctx.globalAlpha=a; ctx.font=`800 ${fs}px Bricolage Grotesque, sans-serif`;
+    const w=Math.min(W-24, ctx.measureText(G.banner.txt).width+36);
+    ctx.fillStyle="rgba(12,29,21,.85)"; ctx.beginPath(); ctx.roundRect(W/2-w/2,H*.3-fs,w,fs*2,12); ctx.fill();
+    ctx.fillStyle="#ffc94a"; ctx.textBaseline="middle"; ctx.fillText(G.banner.txt,W/2,H*.3,W-40); ctx.textBaseline="alphabetic"; ctx.globalAlpha=1;
+  }
+}
+function drawItem(it, T){
+  const x = it.x*W + Math.sin(it.wob)*6*S, y = it.y, s=S;
+  ctx.save(); ctx.translate(x,y);
+  if(it.k==="photon"){
+    ctx.shadowColor="#ffc94a"; ctx.shadowBlur=18*s;
+    ctx.fillStyle="#ffc94a"; ctx.beginPath(); ctx.arc(0,0,10*s,0,7); ctx.fill();
+    ctx.shadowBlur=0; ctx.strokeStyle="rgba(255,220,130,.7)"; ctx.lineWidth=2*s;
+    for(let i=0;i<8;i++){ const a=i*Math.PI/4+T; ctx.beginPath(); ctx.moveTo(Math.cos(a)*13*s,Math.sin(a)*13*s); ctx.lineTo(Math.cos(a)*18*s,Math.sin(a)*18*s); ctx.stroke(); }
+    ctx.fillStyle="#3a2600"; ctx.font=`700 ${10*s+2}px serif`; ctx.textAlign="center"; ctx.textBaseline="middle"; ctx.fillText("hν",0,1);
+  } else if(it.k==="water"){
+    ctx.fillStyle="#5ec8f2"; ctx.beginPath(); ctx.moveTo(0,-14*s);
+    ctx.bezierCurveTo(9*s,-2*s,10*s,4*s,0,10*s); ctx.bezierCurveTo(-10*s,4*s,-9*s,-2*s,0,-14*s); ctx.fill();
+    ctx.fillStyle="rgba(255,255,255,.55)"; ctx.beginPath(); ctx.arc(-3*s,1*s,2.5*s,0,7); ctx.fill();
+  } else if(it.k==="co2"){
+    ctx.fillStyle="rgba(184,196,188,.18)"; ctx.strokeStyle="#b8c4bc"; ctx.lineWidth=2*s;
+    ctx.beginPath(); ctx.arc(0,0,14*s,0,7); ctx.fill(); ctx.stroke();
+    ctx.fillStyle="#e5ece7"; ctx.font=`700 ${9*s+2}px Atkinson Hyperlegible, sans-serif`; ctx.textAlign="center"; ctx.textBaseline="middle"; ctx.fillText("CO₂",0,1);
+  } else if(it.k==="fungus"){
+    // hongo: espora con micelio
+    ctx.rotate(T*1.5+it.wob);
+    ctx.strokeStyle="#6e4a9e"; ctx.lineWidth=1.6*s;
+    for(let i=0;i<6;i++){ const a=i*Math.PI/3; ctx.beginPath(); ctx.moveTo(0,0); ctx.quadraticCurveTo(Math.cos(a+.4)*12*s,Math.sin(a+.4)*12*s,Math.cos(a)*17*s,Math.sin(a)*17*s); ctx.stroke(); }
+    ctx.fillStyle="#b48ae6"; ctx.beginPath(); ctx.arc(0,0,10*s,0,7); ctx.fill();
+    ctx.fillStyle="#5b3a87"; [[-4,-3],[4,-2],[0,4],[-3,3],[3,4]].forEach(([dx,dy])=>{ ctx.beginPath(); ctx.arc(dx*s,dy*s,1.8*s,0,7); ctx.fill(); });
+  } else {
+    // pulgón
+    ctx.rotate(Math.sin(T*6+it.wob)*.15);
+    ctx.fillStyle="#ef6a8a"; ctx.beginPath(); ctx.ellipse(0,0,11*s,8*s,0,0,7); ctx.fill();
+    ctx.fillStyle="#7a2440"; ctx.beginPath(); ctx.arc(10*s,-1*s,5*s,0,7); ctx.fill();
+    ctx.strokeStyle="#7a2440"; ctx.lineWidth=1.6*s;
+    for(let i=-1;i<=1;i++){ ctx.beginPath(); ctx.moveTo(i*5*s,6*s); ctx.lineTo(i*6*s,11*s); ctx.stroke(); }
+    ctx.beginPath(); ctx.moveTo(13*s,-4*s); ctx.quadraticCurveTo(18*s,-12*s,22*s,-10*s); ctx.stroke();
+    ctx.fillStyle="#fff"; ctx.beginPath(); ctx.arc(12*s,-2*s,1.6*s,0,7); ctx.fill();
+  }
+  ctx.restore();
+}
+function lerpColor(a,b,t){ const pa=a.match(/\w\w/g).map(h=>parseInt(h,16)), pb=b.match(/\w\w/g).map(h=>parseInt(h,16));
+  return "rgb("+pa.map((v,i)=>Math.round(v+(pb[i]-v)*t)).join(",")+")"; }
+// Mortiñito: baya morada con corona (cáliz) y pruina azulada; se arruga y pierde color sin energía
+let lastPx = .5, walk = 0;
+function drawBerry(T){
+  const s=S, x=G.px*W, base=H-34*S, e=G.energy/100;
+  const moving = Math.abs(G.px-lastPx) > .0005; lastPx = G.px; if(moving) walk += .35;
+  const R = 27*s, squash = 1 - (1-e)*.14, bob = moving ? Math.abs(Math.sin(walk))*-4*s : Math.sin(T*3)*1.2*s;
+  const shake = G.hurt>0 ? Math.sin(T*60)*4*s : 0;
+  const cy = -12*s - R*squash + bob;
+  ctx.save(); ctx.translate(x+shake, base);
+  // sombra
+  ctx.fillStyle="rgba(0,0,0,.25)"; ctx.beginPath(); ctx.ellipse(0,-2*s,R*.9,5*s,0,0,7); ctx.fill();
+  // piernitas
+  ctx.strokeStyle="#2b1640"; ctx.lineWidth=3.5*s; ctx.lineCap="round";
+  const st = moving ? Math.sin(walk)*6*s : 0;
+  ctx.beginPath(); ctx.moveTo(-9*s,cy+R*squash*.8); ctx.lineTo(-10*s+st,-3*s);
+  ctx.moveTo(9*s,cy+R*squash*.8); ctx.lineTo(10*s-st,-3*s); ctx.stroke();
+  // cuerpo
+  if(G.glow>0){ ctx.shadowColor="#ffc94a"; ctx.shadowBlur=90*s*G.glow; }
+  const body = ctx.createRadialGradient(-9*s,cy-10*s,3*s,0,cy,R*1.1);
+  body.addColorStop(0, lerpColor("8a7a92","6b4aa8",e)); body.addColorStop(.55, lerpColor("5e5068","3d2266",e)); body.addColorStop(1, lerpColor("3d3442","1f0f38",e));
+  ctx.fillStyle=body; ctx.beginPath(); ctx.ellipse(0,cy,R,R*squash,0,0,7); ctx.fill();
+  ctx.shadowBlur=0;
+  // pruina (capa cerosa azulada)
+  ctx.fillStyle=`rgba(170,185,235,${.12+e*.12})`; ctx.beginPath(); ctx.ellipse(-4*s,cy-4*s,R*.8,R*.7*squash,0,0,7); ctx.fill();
+  ctx.fillStyle="rgba(255,255,255,.35)"; ctx.beginPath(); ctx.ellipse(-12*s,cy-12*s,5*s,3*s,-.6,0,7); ctx.fill();
+  // arrugas si hay poca energía
+  if(e<.4){ ctx.strokeStyle="rgba(20,8,30,.45)"; ctx.lineWidth=1.5*s;
+    for(const k of [-1,1]){ ctx.beginPath(); ctx.moveTo(k*18*s,cy+2*s); ctx.quadraticCurveTo(k*12*s,cy+8*s,k*16*s,cy+14*s); ctx.stroke(); } }
+  // corona (cáliz en estrella) y hojita
+  const ty = cy - R*squash + 3*s;
+  ctx.fillStyle="#24102f"; ctx.beginPath();
+  for(let i=0;i<10;i++){ const a=-Math.PI/2+i*Math.PI/5, r=i%2?3*s:8*s; ctx.lineTo(Math.cos(a)*r, ty+Math.sin(a)*r*.6); }
+  ctx.closePath(); ctx.fill();
+  const leafC = lerpColor("b59a4a","6cc24a", Math.min(1,e*1.3)), droop = (1-e)*1.1;
+  ctx.strokeStyle="#4a3a24"; ctx.lineWidth=2.5*s; ctx.beginPath(); ctx.moveTo(0,ty); ctx.lineTo(2*s,ty-9*s); ctx.stroke();
+  ctx.save(); ctx.translate(2*s,ty-9*s); ctx.rotate(-.4+droop);
+  ctx.fillStyle=leafC; ctx.beginPath(); ctx.ellipse(11*s,0,12*s,5.5*s,0,0,7); ctx.fill(); ctx.restore();
+  // cara
+  const blink=(T%3.4)<.12, ex=9*s, ey=cy-2*s;
+  if(blink){ ctx.fillStyle="#fff"; ctx.fillRect(-ex-4*s,ey,8*s,2*s); ctx.fillRect(ex-4*s,ey,8*s,2*s); }
+  else for(const k of [-1,1]){
+    ctx.fillStyle="#fff"; ctx.beginPath(); ctx.ellipse(k*ex,ey,5*s,6*s,0,0,7); ctx.fill();
+    ctx.fillStyle="#120818"; ctx.beginPath(); ctx.arc(k*ex+1.5*s,ey+1*s,2.8*s,0,7); ctx.fill();
+  }
+  ctx.strokeStyle="#fff"; ctx.lineWidth=2*s; ctx.beginPath();
+  if(e>.35) ctx.arc(0,cy+7*s,5*s,.15*Math.PI,.85*Math.PI); else ctx.arc(0,cy+14*s,5*s,1.15*Math.PI,1.85*Math.PI);
+  ctx.stroke();
+  if(e>.5){ ctx.fillStyle="rgba(239,106,138,.55)"; ctx.beginPath(); ctx.arc(-17*s,cy+6*s,3.5*s,0,7); ctx.arc(17*s,cy+6*s,3.5*s,0,7); ctx.fill(); }
+  ctx.restore();
+}
+
+// ---------- Interfaz ----------
+function renderHud(){
+  const e = Math.max(0, Math.round(G.energy));
+  $("energyTxt").textContent = e+"%"; $("barFill").style.width = e+"%";
+  $("bar").classList.toggle("low", e<30);
+  $("scoreTxt").textContent = G.score;
+  const t = Math.ceil(G.time); $("timeTxt").textContent = Math.floor(t/60)+":"+String(t%60).padStart(2,"0");
+  $("btnQ").disabled = !G.running || G.energy>=95;
+  $("lvlNum").textContent = G.level+1; $("lvlName").textContent = LEVELS[G.level].name;
+  $("lvlSteps").innerHTML = LEVELS.map((_,i)=>`<i class="${i<G.level?"done":i===G.level?"now":""}"></i>`).join("");
+}
+// ---------- Ranking en vivo (Firebase) o simulado ----------
+const SALA = ((new URLSearchParams(location.search).get("sala")) || new Date().toLocaleDateString("en-CA")).replace(/[^\w-]/g,"").slice(0,30) || "clase";
+const LIVE = !!CONFIG.databaseURL;
+let players = {}, myId = null, best = 0, lastSent = 0, sentScore = -1;
+try{ myId = localStorage.getItem("mortinito-id"); best = +localStorage.getItem("mortinito-best-"+SALA) || 0; }catch(e){}
+if(!myId){ myId = "j"+Math.random().toString(36).slice(2,11); try{ localStorage.setItem("mortinito-id", myId); }catch(e){} }
+const dbPath = () => CONFIG.databaseURL.replace(/\/$/,"") + "/salas/" + encodeURIComponent(SALA) + "/jugadores";
+function reloadPlayers(){ fetch(dbPath()+".json").then(r=>r.json()).then(d=>{ players = d||{}; renderBoard(); renderProjector(); }).catch(()=>{}); }
+function connectLive(){
+  if(!LIVE) return;
+  try{
+    const es = new EventSource(dbPath()+".json");
+    es.addEventListener("put", ev => {
+      const m = JSON.parse(ev.data); const parts = m.path.split("/").filter(Boolean);
+      if(!parts.length) players = m.data || {};
+      else if(parts.length===1){ if(m.data===null) delete players[parts[0]]; else players[parts[0]] = m.data; }
+      else { players[parts[0]] = Object.assign({}, players[parts[0]], {[parts[1]]: m.data}); }
+      renderBoard(); renderProjector();
+    });
+    es.addEventListener("patch", reloadPlayers);
+  }catch(e){ setInterval(reloadPlayers, 4000); reloadPlayers(); }
+}
+function sendScore(force){
+  if(!LIVE || !G) return;
+  const sc = Math.max(best, G.score), now = Date.now();
+  if(!force && (now-lastSent < 2000 || sc===sentScore)) return;
+  lastSent = now; sentScore = sc;
+  fetch(dbPath()+"/"+myId+".json", {method:"PUT", body: JSON.stringify({nombre:G.name, puntaje:sc, t:now})}).catch(()=>{});
+}
+function others(){
+  if(LIVE) return Object.entries(players).filter(([id,p])=>id!==myId && p && typeof p.puntaje==="number")
+    .map(([id,p])=>({n:String(p.nombre||"Estudiante").slice(0,18), s:p.puntaje}));
+  return bots.map(b=>({n:b.n,s:b.s}));
+}
+function ranking(){
+  const mine = LIVE ? Math.max(best, G.score) : G.score;
+  return [...others(), {n:G.name, s:mine, me:true}].sort((a,b)=>b.s-a.s);
+}
+function fillTop(list, r, markMe){
+  list.innerHTML = "";
+  r.slice(0,5).forEach((p,i) => {
+    const li = document.createElement("li"); if(p.me && markMe) li.className="me";
+    li.innerHTML = `<span class="pos">${i+1}</span><span class="nm"></span><span>${p.s}</span>`;
+    li.querySelector(".nm").textContent = p.me ? p.n+" (tú)" : p.n;
+    list.appendChild(li);
+  });
+  if(!r.length){ const li=document.createElement("li"); li.innerHTML='<span class="pos">–</span><span class="nm">Esperando estudiantes…</span><span></span>'; list.appendChild(li); }
+}
+function gameLink(){ return (CONFIG.gameURL || (location.origin + location.pathname)) + "?sala=" + encodeURIComponent(SALA); }
+let qrDone = false;
+function renderProjector(){
+  if($("proj").hidden) return;
+  const r = others().sort((a,b)=>b.s-a.s);
+  fillTop($("pTop5"), r, false);
+  $("pCount").textContent = LIVE ? r.length : 35;
+  $("pSala").textContent = SALA; $("pUrl").textContent = gameLink();
+  $("pMode").textContent = LIVE ? "" : "Vista de ejemplo: ranking simulado";
+  if(!qrDone){ qrDone = true; $("qr").innerHTML = "";
+    try{
+      const qr = qrcode(0, "M"); qr.addData(gameLink()); qr.make();
+      const n = qr.getModuleCount(), c = document.createElement("canvas"), k = 12; c.width = c.height = n*k;
+      const g = c.getContext("2d"); g.fillStyle="#fff"; g.fillRect(0,0,c.width,c.height); g.fillStyle="#0c1d15";
+      for(let y=0;y<n;y++) for(let x=0;x<n;x++) if(qr.isDark(y,x)) g.fillRect(x*k,y*k,k,k);
+      c.setAttribute("role","img"); c.setAttribute("aria-label","Código QR para entrar al juego"); $("qr").appendChild(c);
+    }
+    catch(e){ $("qr").textContent = "No se pudo generar el QR. Usa la dirección de abajo."; } }
+}
+function route(){ $("proj").hidden = location.hash !== "#proyector"; renderProjector(); }
+addEventListener("hashchange", route);
+$("btnProj").onclick = () => { location.hash = "proyector"; route(); };
+$("btnProjClose").onclick = () => { location.hash = ""; $("proj").hidden = true; };
+if(LIVE) setInterval(renderProjector, 5000);
+function renderBoard(){
+  const r = ranking();
+  fillTop($("top5"), r, true);
+  const pos = r.findIndex(p=>p.me)+1, mine = r[pos-1].s;
+  $("players").textContent = r.length;
+  $("myrank").innerHTML = pos<=5 ? `<b>¡Estás en el top 5!</b> Mantén la energía arriba.` :
+    `Tu posición: <b>#${pos}</b> de ${r.length} · te faltan <b>${r[4].s - mine + 1}</b> puntos para el top 5`;
+  return pos;
+}
+
+// ---------- Preguntas ----------
+function nextQuestion(){
+  // 1.ª pregunta del nivel: básica; 2.ª: intermedia; desde la 3.ª: avanzada
+  const L = G.level, band = Math.min(2, G.lvlAsked[L]++), pool = pools[L][band];
+  const from = [0,17,34][band], to = [17,34,50][band];
+  if(!pool.length) for(let i=from;i<to;i++) pool.push(i);
+  const idx = pool.splice(Math.floor(Math.random()*pool.length),1)[0], r = LEVELS[L].qs[idx];
+  const opts = [0,1,2,3].sort(()=>Math.random()-.5);
+  return {q:r[0], o:opts.map(j=>r[1+j]), a:opts.indexOf(0), e:r[5], band};
+}
+function openQuiz(mode){
+  quizMode = mode; keys = {}; pointerX = null;
+  const q = nextQuestion(); G.asked++;
+  $("qEyebrow").textContent = mode==="forced" ? "¡Mortiñito se quedó sin energía!" : "Recarga de energía";
+  const pts = 15 + 10*(G.level+1);
+  $("qTopic").textContent = "Nivel "+(G.level+1)+" · "+LEVELS[G.level].name+" · "+["básica","intermedia","avanzada"][q.band];
+  $("qReward").textContent = mode==="forced" ? "Correcta: energía al 70%" : "Correcta: +35 energía y +"+pts+" pts";
+  $("qText").textContent = q.q;
+  $("qFb").hidden = true; $("qNext").hidden = true;
+  const box = $("qOpts"); box.innerHTML = "";
+  q.o.forEach((txt,i) => {
+    const b = document.createElement("button");
+    b.textContent = String.fromCharCode(65+i)+") "+txt;
+    b.onclick = () => answer(q,i,pts);
+    box.appendChild(b);
+  });
+  $("quiz").hidden = false; box.firstChild.focus();
+}
+function answer(q,i,pts){
+  const btns = [...$("qOpts").children];
+  btns.forEach((b,j) => { b.disabled = true; if(j===q.a) b.classList.add("ok"); else if(j===i) b.classList.add("bad"); });
+  const ok = i===q.a, fb = $("qFb");
+  fb.className = "feedback"+(ok?"":" wrong");
+  if(ok){
+    G.right++;
+    if(quizMode==="forced"){ G.energy = 70; } else { G.energy = Math.min(100, G.energy+35); G.score += pts; }
+    fb.innerHTML = "<b>¡Correcto!</b> ";
+    $("qNext").textContent = "Volver al juego";
+  } else {
+    fb.innerHTML = "<b>No es correcta.</b> La respuesta es "+String.fromCharCode(65+q.a)+". ";
+    $("qNext").textContent = quizMode==="forced" ? "Intentar otra pregunta" : "Volver al juego";
+  }
+  fb.append(q.e); fb.hidden = false; $("qNext").hidden = false; $("qNext").focus();
+  $("qNext").onclick = () => {
+    $("quiz").hidden = true;
+    if(!ok && quizMode==="forced"){ openQuiz("forced"); return; }
+    quizMode = null; renderHud(); renderBoard();
+  };
+}
+$("btnQ").onclick = () => { if(G.running && !quizMode) openQuiz("voluntary"); };
+
+// ---------- Inicio y fin ----------
+function start(){
+  const name = $("nameIn").value; newGame(); G.name = (name.trim()||"Tú").slice(0,18);
+  try{ localStorage.setItem("mortinito-name", G.name); }catch(e){}
+  G.running = true; $("lobby").hidden = true; $("end").hidden = true; sendScore(true); renderHud(); renderBoard(); wrap.focus();
+}
+function finish(){
+  G.running = false;
+  if(G.score > best){ best = G.score; try{ localStorage.setItem("mortinito-best-"+SALA, best); }catch(e){} }
+  sendScore(true); const pos = renderBoard();
+  $("rScore").textContent = G.score + (LIVE && best>G.score ? " (récord "+best+")" : ""); $("rRank").textContent = "#"+pos; $("rQ").textContent = G.right+"/"+G.asked;
+  $("endTitle").textContent = pos<=5 ? "¡Quedaste en el top 5!" : "Ronda terminada";
+  $("endMsg").textContent = G.asked ? `Respondiste bien ${G.right} de ${G.asked} preguntas. Llegaste al nivel ${G.level+1}: ${LEVELS[G.level].name}.` :
+    "No respondiste preguntas esta vez. Recargar energía con preguntas también suma puntos.";
+  $("end").hidden = false; renderHud();
+}
+$("btnStart").onclick = start; $("btnAgain").onclick = start;
+$("nameIn").addEventListener("keydown", e => { if(e.key==="Enter") start(); });
+
+// Estado de muestra detrás de la pantalla de inicio
+bots.forEach(b => b.s = Math.round(b.rate*40*(.6+Math.random()*.8)));
+G.items = [{k:"photon",x:.3,y:H*.25,vy:0,wob:0},{k:"water",x:.62,y:H*.45,vy:0,wob:1},{k:"co2",x:.8,y:H*.2,vy:0,wob:2},{k:"aphid",x:.18,y:H*.55,vy:0,wob:3},{k:"fungus",x:.48,y:H*.62,vy:0,wob:4}];
+try{ const nm = localStorage.getItem("mortinito-name"); if(nm) $("nameIn").value = nm; }catch(e){}
+if(!LIVE) $("players").textContent = 35;
+$("roomCode").textContent = SALA;
+renderBoard(); renderHud(); bots.forEach(b=>b.s=0);
+if(LIVE) $("modeNote").textContent = "Ranking real de la sala "+SALA+". Tu mejor puntaje del día queda guardado.";
+connectLive(); route();
+requestAnimationFrame(tick);
+</script>
+
+</body>
+</html>
