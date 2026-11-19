@@ -7,4 +7,4 @@ Mortiñito recarga su energía respondiendo preguntas del curso; el ranking del 
 - Pantalla para proyectar en clase (QR y top 5): https://intinauter-collab.github.io/morti-ito/#proyector
 
 Cada día se abre una sala nueva automáticamente. Los puntajes se guardan en Firebase Realtime Database.
-El banco de 300 preguntas (6 temas × 50) está dentro de `index.html`, en la constante `LEVELS`.
+El banco de 900 preguntas (6 temas × 150, 600 basadas en Taiz y Zeiger) está dentro de `index.html`, en la constante `LEVELS`.
